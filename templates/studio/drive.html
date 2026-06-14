@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dreamers Studio · Drive</title>
+<style>
+  :root{--deep:#060f1e;--primary:#0077b6;--accent:#00b4d8;--foam:#90e0ef;--gold:#f4c430;--card:#0a1626;--border:#1a3a52;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--deep);color:#e8f4f8;font-family:system-ui,'Segoe UI',Tahoma,sans-serif;line-height:1.6;}
+  .wrap{max-width:900px;margin:0 auto;padding:24px 16px;}
+  .logo{font-size:32px;}
+  h1{font-size:22px;font-weight:600;margin:8px 0 4px;}
+  .sub{color:var(--foam);font-size:14px;margin:0 0 4px;}
+  .nav{display:flex;gap:16px;margin-bottom:24px;}
+  .nav a{color:var(--foam);font-size:13px;text-decoration:none;opacity:.7;}
+  .nav a:hover,.nav a.active{opacity:1;color:var(--accent);}
+  .btn{display:inline-block;padding:12px 24px;border:none;border-radius:8px;background:var(--primary);color:#fff;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:none;}
+  .btn:hover{background:var(--accent);}
+  .btn:disabled{opacity:.6;cursor:wait;}
+  .btn-sm{padding:7px 14px;font-size:13px;}
+  .btn-google{background:#fff;color:#333;border:1px solid #ddd;display:flex;align-items:center;gap:10px;margin:0 auto;}
+  .btn-google:hover{background:#f5f5f5;}
+  .btn-gold{background:rgba(244,196,48,.15);border:1px solid var(--gold);color:var(--gold);}
+  .btn-gold:hover{background:rgba(244,196,48,.25);}
+  .btn-danger{background:rgba(180,30,30,.2);border:1px solid #a02020;color:#ffaaaa;}
+  .err{background:#3a1212;border:1px solid #6e2020;color:#ffb4b4;padding:12px;border-radius:8px;margin-bottom:16px;font-size:14px;}
+  /* Login screen */
+  .login-center{text-align:center;padding:80px 20px;}
+  .login-center h2{font-size:24px;margin-bottom:8px;}
+  .login-center p{color:var(--foam);margin-bottom:32px;}
+  /* Toolbar */
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap;}
+  .toolbar select{padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:#e8f4f8;font-size:14px;flex:1;min-width:180px;}
+  /* Drop zone */
+  .dropzone{border:2px dashed var(--border);border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;margin-bottom:20px;}
+  .dropzone.drag{border-color:var(--accent);background:rgba(0,180,216,.07);}
+  .dropzone p{color:var(--foam);margin:8px 0 0;font-size:14px;}
+  .dropzone input{display:none;}
+  /* File grid */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;}
+  .file-card{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .2s;}
+  .file-card:hover{border-color:var(--accent);}
+  .thumb{width:100%;height:110px;object-fit:cover;background:#0d1f30;display:block;}
+  .thumb-placeholder{width:100%;height:110px;background:#0d1f30;display:flex;align-items:center;justify-content:center;font-size:36px;}
+  .file-info{padding:8px 10px;}
+  .file-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;}
+  .file-type{font-size:11px;color:#5a7a90;margin-bottom:6px;}
+  .file-actions{display:flex;gap:6px;}
+  .file-actions a,.file-actions button{flex:1;padding:5px;font-size:12px;text-align:center;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--foam);cursor:pointer;text-decoration:none;}
+  .file-actions a:hover,.file-actions button:hover{border-color:var(--accent);color:var(--accent);}
+  /* Preview modal */
+  #previewModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;align-items:center;justify-content:center;}
+  #previewModal.open{display:flex;}
+  #previewModal img,#previewModal video{max-width:90vw;max-height:85vh;border-radius:8px;}
+  #previewClose{position:fixed;top:16px;left:16px;background:rgba(255,255,255,.1);border:none;color:#fff;font-size:22px;cursor:pointer;border-radius:50%;width:40px;height:40px;}
+  /* Upload progress */
+  .progress-bar{height:4px;background:var(--border);border-radius:4px;margin-top:10px;overflow:hidden;display:none;}
+  .progress-fill{height:100%;background:var(--accent);width:0;transition:width .3s;}
+  .status-msg{font-size:13px;color:var(--foam);margin-top:8px;min-height:20px;}
+  #loadingFiles{text-align:center;padding:40px;color:var(--foam);font-size:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">🐬</div>
+  <h1>Dreamers Studio</h1>
+  <p class="sub">محطة توليد محتوى السوشيال ميديا</p>
+  <div class="nav">
+    <a href="/">السكريبت</a>
+    <a href="/voices/">الأصوات</a>
+    <a href="/drive/" class="active">Drive ☁️</a>
+  </div>
+
+  {% if error %}<div class="err">خطأ في تسجيل الدخول: {{ error }}</div>{% endif %}
+
+  {% if not authenticated %}
+  <!-- ══ شاشة تسجيل الدخول ══ -->
+  <div class="login-center">
+    <div style="font-size:64px;margin-bottom:16px;">☁️</div>
+    <h2>ربط Google Drive</h2>
+    <p>سجّل دخولك بـ Google عشان تقدر تتصفح، ترفع، وتحمّل ملفاتك على Drive مباشرة من هنا.</p>
+    <a href="/auth/google/" class="btn btn-google">
+      <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.2l6.7-6.7C35.7 2.3 30.2 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.8 6C12.4 13 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8C43.6 37.4 46.5 31.4 46.5 24.5z"/><path fill="#FBBC05" d="M10.4 28.6A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6L2.5 13.3A23.9 23.9 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2 1.4-4.7 2.2-7.7 2.2-6.2 0-11.5-4.2-13.4-9.8l-7.8 6C6.6 42.6 14.6 48 24 48z"/></svg>
+      تسجيل الدخول بـ Google
+    </a>
+  </div>
+
+  {% else %}
+  <!-- ══ الواجهة الرئيسية ══ -->
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <select id="folderSelect" onchange="loadFiles()">
+      <option value="">📁 كل الملفات</option>
+    </select>
+    <button class="btn btn-sm btn-danger" onclick="logout()">تسجيل الخروج</button>
+  </div>
+
+  <!-- Drop zone -->
+  <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+    <div style="font-size:32px;">⬆️</div>
+    <p>اسحب ملف هنا أو اضغط للاختيار</p>
+    <p style="font-size:12px;color:#5a7a90;">صور، فيديوهات، وملفات صوتية</p>
+    <input type="file" id="fileInput" accept="image/*,video/*,audio/*" onchange="uploadSelected(this)">
+    <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
+    <p class="status-msg" id="uploadStatus"></p>
+  </div>
+
+  <!-- File grid -->
+  <div id="loadingFiles">⏳ جاري تحميل الملفات...</div>
+  <div class="grid" id="fileGrid"></div>
+</div>
+
+<!-- Preview modal -->
+<div id="previewModal">
+  <button id="previewClose" onclick="closePreview()">✕</button>
+  <div id="previewContent"></div>
+</div>
+
+<script>
+var currentFolder = '';
+
+// ─── تحميل الفولدرات ─────────────────────────────────────────────────────────
+fetch('/api/drive/folders/')
+  .then(function(r){ return r.json(); })
+  .then(function(d) {
+    if (!d.ok) return;
+    var sel = document.getElementById('folderSelect');
+    d.folders.forEach(function(f) {
+      var o = document.createElement('option');
+      o.value = f.id;
+      o.textContent = '📁 ' + f.name;
+      sel.appendChild(o);
+    });
+  });
+
+// ─── تحميل الملفات ───────────────────────────────────────────────────────────
+function loadFiles() {
+  currentFolder = document.getElementById('folderSelect').value;
+  document.getElementById('loadingFiles').style.display = 'block';
+  document.getElementById('fileGrid').innerHTML = '';
+
+  var url = '/api/drive/files/' + (currentFolder ? '?folder_id=' + currentFolder : '');
+  fetch(url)
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      document.getElementById('loadingFiles').style.display = 'none';
+      if (!d.ok) { document.getElementById('loadingFiles').textContent = 'خطأ: ' + d.error; return; }
+      if (!d.files.length) {
+        document.getElementById('loadingFiles').style.display = 'block';
+        document.getElementById('loadingFiles').textContent = 'لا توجد ملفات في هذا الفولدر.';
+        return;
+      }
+      renderFiles(d.files);
+    })
+    .catch(function(e) {
+      document.getElementById('loadingFiles').textContent = 'خطأ في التحميل: ' + e.message;
+    });
+}
+
+function typeLabel(mime) {
+  if (mime.startsWith('image/')) return '🖼️ صورة';
+  if (mime.startsWith('video/')) return '🎬 فيديو';
+  if (mime.startsWith('audio/')) return '🎵 صوت';
+  return '📄 ملف';
+}
+
+function renderFiles(files) {
+  var grid = document.getElementById('fileGrid');
+  grid.innerHTML = files.map(function(f) {
+    var thumb = f.thumbnailLink
+      ? '<img class="thumb" src="' + f.thumbnailLink + '" alt="' + f.name + '" loading="lazy">'
+      : '<div class="thumb-placeholder">' + (f.mimeType.startsWith('video/') ? '🎬' : f.mimeType.startsWith('audio/') ? '🎵' : '🖼️') + '</div>';
+
+    var previewBtn = (f.mimeType.startsWith('image/') || f.mimeType.startsWith('video/'))
+      ? '<button onclick="preview(\'' + f.id + '\',\'' + f.mimeType + '\')">👁️ عرض</button>'
+      : '<a href="' + (f.webViewLink||'#') + '" target="_blank">🔗 فتح</a>';
+
+    return '<div class="file-card">' +
+      (f.mimeType.startsWith('image/') ? '<img class="thumb" src="' + f.thumbnailLink + '" onclick="preview(\'' + f.id + '\',\'' + f.mimeType + '\')" style="cursor:pointer" loading="lazy">' : thumb) +
+      '<div class="file-info">' +
+        '<div class="file-name" title="' + f.name + '">' + f.name + '</div>' +
+        '<div class="file-type">' + typeLabel(f.mimeType) + '</div>' +
+        '<div class="file-actions">' +
+          previewBtn +
+          '<a href="/api/drive/download/' + f.id + '/" download="' + f.name + '">⬇️ تحميل</a>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ─── رفع ملف ─────────────────────────────────────────────────────────────────
+var dz = document.getElementById('dropzone');
+dz.addEventListener('dragover', function(e){ e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', function(){ dz.classList.remove('drag'); });
+dz.addEventListener('drop', function(e){
+  e.preventDefault(); dz.classList.remove('drag');
+  var files = e.dataTransfer.files;
+  if (files.length) uploadFile(files[0]);
+});
+
+function uploadSelected(input) {
+  if (input.files.length) uploadFile(input.files[0]);
+}
+
+function uploadFile(file) {
+  var form = new FormData();
+  form.append('file', file);
+  if (currentFolder) form.append('folder_id', currentFolder);
+
+  document.getElementById('progressBar').style.display = 'block';
+  document.getElementById('progressFill').style.width = '10%';
+  document.getElementById('uploadStatus').textContent = '⏳ جاري الرفع...';
+
+  fetch('/api/drive/upload/', { method: 'POST', body: form })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      document.getElementById('progressFill').style.width = '100%';
+      if (d.ok) {
+        document.getElementById('uploadStatus').textContent = '✅ تم رفع "' + d.file.name + '" بنجاح!';
+        setTimeout(function(){ loadFiles(); }, 1000);
+      } else {
+        document.getElementById('uploadStatus').textContent = '❌ ' + d.error;
+      }
+    })
+    .catch(function(e) {
+      document.getElementById('uploadStatus').textContent = '❌ ' + e.message;
+    })
+    .finally(function() {
+      setTimeout(function(){
+        document.getElementById('progressBar').style.display = 'none';
+        document.getElementById('progressFill').style.width = '0';
+      }, 2000);
+    });
+}
+
+// ─── Preview ──────────────────────────────────────────────────────────────────
+function preview(fileId, mimeType) {
+  var modal = document.getElementById('previewModal');
+  var content = document.getElementById('previewContent');
+  content.innerHTML = '<div style="color:#fff;font-size:14px;">⏳ جاري التحميل...</div>';
+  modal.classList.add('open');
+
+  fetch('/api/drive/download/' + fileId + '/')
+    .then(function(r){ return r.blob(); })
+    .then(function(blob) {
+      var url = URL.createObjectURL(blob);
+      if (mimeType.startsWith('image/')) {
+        content.innerHTML = '<img src="' + url + '">';
+      } else if (mimeType.startsWith('video/')) {
+        content.innerHTML = '<video controls autoplay><source src="' + url + '" type="' + mimeType + '"></video>';
+      }
+    })
+    .catch(function(e) {
+      content.innerHTML = '<div style="color:#ffb4b4;">خطأ: ' + e.message + '</div>';
+    });
+}
+
+function closePreview() {
+  document.getElementById('previewModal').classList.remove('open');
+  document.getElementById('previewContent').innerHTML = '';
+}
+document.getElementById('previewModal').addEventListener('click', function(e){
+  if (e.target === this) closePreview();
+});
+
+function logout() {
+  fetch('/api/drive/logout/', {method:'POST'}).then(function(){ location.href='/drive/'; });
+}
+
+// تحميل الملفات عند فتح الصفحة
+loadFiles();
+</script>
+{% endif %}
+</body>
+</html>

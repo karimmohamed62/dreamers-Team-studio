@@ -62,6 +62,7 @@
   <div class="nav">
     <a href="/" class="active">السكريبت</a>
     <a href="/voices/">الأصوات</a>
+    <a href="/drive/">Drive ☁️</a>
   </div>
 
   <form id="scriptForm" onsubmit="generateScript(event)">
@@ -245,6 +246,8 @@ function renderResult(s, audio_b64) {
       '<div class="audio-box">' +
         '<audio controls><source src="' + audioSrc + '" type="audio/mpeg"></audio>' +
         '<a href="' + audioSrc + '" download="voiceover.mp3">⬇️ تحميل MP3</a>' +
+        '<button class="btn btn-gold btn-sm" style="margin-top:8px;width:100%;" onclick="uploadAudioToDrive(\'' + audio_b64 + '\')">☁️ رفع الصوت على Drive</button>' +
+        '<p id="driveUploadStatus" style="font-size:12px;color:var(--foam);margin-top:6px;min-height:16px;"></p>' +
       '</div>';
   } else {
     audioHtml =
@@ -270,6 +273,32 @@ function renderResult(s, audio_b64) {
       '<div class="tags">' + tagsHtml + '</div>' +
       audioHtml +
     '</div>';
+}
+
+// ─── رفع الصوت على Drive ──────────────────────────────────────────────────────
+function uploadAudioToDrive(audio_b64) {
+  var statusEl = document.getElementById('driveUploadStatus');
+  statusEl.textContent = '⏳ جاري الرفع على Drive...';
+  var binary = atob(audio_b64);
+  var bytes = new Uint8Array(binary.length);
+  for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  var blob = new Blob([bytes], {type: 'audio/mpeg'});
+  var form = new FormData();
+  var topic = document.getElementById('topic').value.trim() || 'voiceover';
+  form.append('file', blob, topic.replace(/\s+/g,'_') + '_voiceover.mp3');
+
+  fetch('/api/drive/upload/', {method:'POST', body: form})
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (d.ok) {
+        statusEl.innerHTML = '✅ تم الرفع! <a href="' + d.file.link + '" target="_blank" style="color:var(--accent);">فتح على Drive ↗</a>';
+      } else if (d.error && d.error.includes('مسجّل')) {
+        statusEl.innerHTML = '⚠️ سجّل دخولك على <a href="/drive/" style="color:var(--accent);">Drive</a> أولاً';
+      } else {
+        statusEl.textContent = '❌ ' + d.error;
+      }
+    })
+    .catch(function(e){ statusEl.textContent = '❌ ' + e.message; });
 }
 
 // ─── توليد الصوت منفصلاً (بعد سكريبت فقط) ────────────────────────────────────

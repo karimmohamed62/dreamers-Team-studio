@@ -162,6 +162,125 @@ def home(request):
     return render(request, "studio/home.html", {"platforms": PLATFORM_SPECS})
 
 
+# ─── Google Drive OAuth ───────────────────────────────────────────────────────
+
+def drive_login(request):
+    """Redirect user to Google OAuth consent screen."""
+    from .drive_service import get_auth_url
+    auth_url, state = get_auth_url()
+    request.session["oauth_state"] = state
+    from django.shortcuts import redirect
+    return redirect(auth_url)
+
+
+def drive_callback(request):
+    """Receive OAuth code, exchange for tokens, save in session."""
+    from django.shortcuts import redirect
+    from .drive_service import exchange_code
+    code  = request.GET.get("code")
+    error = request.GET.get("error")
+    if error or not code:
+        print(f"[Drive OAuth] error={error} params={dict(request.GET)}")
+        return redirect("/drive/?error=" + (error or "no_code"))
+    try:
+        tokens = exchange_code(code)
+        request.session["drive_tokens"] = tokens
+        print(f"[Drive OAuth] tokens received, token={tokens['token'][:20]}...")
+    except Exception as e:
+        print(f"[Drive OAuth] exchange failed: {e}")
+        return redirect(f"/drive/?error={e}")
+    return redirect("/drive/")
+
+
+def drive_page(request):
+    """Main Drive browser page."""
+    tokens = request.session.get("drive_tokens")
+    error  = request.GET.get("error")
+    return render(request, "studio/drive.html", {
+        "authenticated": bool(tokens),
+        "error": error,
+    })
+
+
+# ─── Drive API endpoints ──────────────────────────────────────────────────────
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_drive_upload(request):
+    """POST /api/drive/upload/ — multipart file upload to Google Drive."""
+    tokens = request.session.get("drive_tokens")
+    if not tokens:
+        return JsonResponse({"ok": False, "error": "غير مسجّل الدخول"}, status=401)
+    from .drive_service import upload_file as drive_upload
+    f         = request.FILES.get("file")
+    folder_id = request.POST.get("folder_id") or None
+    if not f:
+        return JsonResponse({"ok": False, "error": "لم يتم إرسال ملف"}, status=400)
+    try:
+        result = drive_upload(
+            access_token=tokens["token"],
+            file_bytes=f.read(),
+            filename=f.name,
+            mime_type=f.content_type,
+            folder_id=folder_id,
+        )
+        return JsonResponse({"ok": True, "file": result})
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=500)
+
+
+@require_http_methods(["GET"])
+def api_drive_files(request):
+    """GET /api/drive/files/?folder_id=<id> — list media files."""
+    tokens = request.session.get("drive_tokens")
+    if not tokens:
+        return JsonResponse({"ok": False, "error": "غير مسجّل الدخول"}, status=401)
+    from .drive_service import list_media_files
+    folder_id = request.GET.get("folder_id") or None
+    try:
+        files = list_media_files(tokens["token"], folder_id=folder_id)
+        return JsonResponse({"ok": True, "files": files})
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=500)
+
+
+@require_http_methods(["GET"])
+def api_drive_folders(request):
+    """GET /api/drive/folders/ — list Drive folders."""
+    tokens = request.session.get("drive_tokens")
+    if not tokens:
+        return JsonResponse({"ok": False, "error": "غير مسجّل الدخول"}, status=401)
+    from .drive_service import list_folders
+    try:
+        folders = list_folders(tokens["token"])
+        return JsonResponse({"ok": True, "folders": folders})
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_drive_logout(request):
+    """POST /api/drive/logout/ — clear Drive session."""
+    request.session.pop("drive_tokens", None)
+    return JsonResponse({"ok": True})
+
+
+@require_http_methods(["GET"])
+def api_drive_download(request, file_id):
+    """GET /api/drive/download/<file_id>/ — stream file from Drive."""
+    tokens = request.session.get("drive_tokens")
+    if not tokens:
+        return JsonResponse({"ok": False, "error": "غير مسجّل الدخول"}, status=401)
+    from .drive_service import download_file as drive_download
+    try:
+        data = drive_download(tokens["token"], file_id)
+        return HttpResponse(data, content_type="application/octet-stream",
+                            headers={"Content-Disposition": f'attachment; filename="{file_id}"'})
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=500)
+
+
 def voice_settings_page(request):
     """صفحة التحكم في إعدادات الأصوات"""
     voices = []
