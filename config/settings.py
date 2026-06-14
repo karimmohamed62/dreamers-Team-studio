@@ -79,4 +79,18 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# ── Render / Production ────────────────────────────────────────────────────────
+import dj_database_url
+
+if os.getenv("DATABASE_URL"):
+    DATABASES["default"] = dj_database_url.parse(os.getenv("DATABASE_URL"))
+
+if not DEBUG:
+    ALLOWED_HOSTS = ["*.onrender.com", "localhost", "127.0.0.1"]
+    CSRF_TRUSTED_ORIGINS = ["https://*.onrender.com"]
+    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
