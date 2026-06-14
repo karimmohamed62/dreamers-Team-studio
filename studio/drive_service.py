@@ -2,6 +2,7 @@
 Google Drive API service — OAuth 2.0 + Drive operations
 """
 import io
+import os
 import requests as _requests
 from urllib.parse import urlencode
 from django.conf import settings
@@ -9,7 +10,10 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 
-REDIRECT_URI = "http://127.0.0.1:8000/auth/google/callback/"
+REDIRECT_URI = os.getenv(
+    "GOOGLE_REDIRECT_URI",
+    "http://127.0.0.1:8000/auth/google/callback/"
+)
 SCOPES = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly"
 AUTH_URI  = "https://accounts.google.com/o/oauth2/auth"
 TOKEN_URI = "https://oauth2.googleapis.com/token"
