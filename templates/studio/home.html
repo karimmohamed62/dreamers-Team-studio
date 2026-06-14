@@ -26,6 +26,8 @@
   .btn-gold{background:rgba(244,196,48,.15);border:1px solid var(--gold);color:var(--gold);}
   .btn-gold:hover{background:rgba(244,196,48,.25);}
   .btn-sm{padding:8px 16px;font-size:13px;width:auto;margin-top:0;}
+  .btns{display:flex;gap:10px;margin-top:16px;}
+  .btns .btn{margin-top:0;}
   .err{background:#3a1212;border:1px solid #6e2020;color:#ffb4b4;padding:12px;border-radius:8px;margin-top:20px;font-size:14px;}
   .card{background:#0a1626;border:1px solid #1a3a52;border-radius:12px;padding:18px;margin-top:24px;}
   .meta{font-size:12px;color:#5a7a90;margin-bottom:12px;}
@@ -41,10 +43,15 @@
   .tags{margin-top:10px;}
   .tag{display:inline-block;background:rgba(0,119,182,.25);color:var(--foam);font-size:12px;padding:3px 10px;border-radius:6px;margin:2px;}
   .h2{font-size:14px;font-weight:600;margin:16px 0 8px;color:var(--foam);}
-  .voice-bar{background:#0d1f30;border:1px solid #1a3a52;border-radius:8px;padding:12px;margin-top:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-  .voice-bar select{flex:1;min-width:180px;margin:0;}
-  audio{width:100%;margin-top:8px;border-radius:6px;}
+  .voice-row{display:flex;gap:10px;align-items:flex-end;margin-top:4px;}
+  .voice-row select{flex:1;margin:0;}
+  .voice-row .btn{margin-top:0;width:auto;padding:11px 18px;font-size:14px;}
+  .audio-box{background:#0d1f30;border:1px solid #1a3a52;border-radius:8px;padding:12px;margin-top:12px;}
+  .audio-box audio{width:100%;border-radius:6px;}
+  .audio-box a{display:block;text-align:center;margin-top:8px;color:var(--accent);font-size:13px;text-decoration:none;}
+  .audio-box a:hover{text-decoration:underline;}
   #spinner{text-align:center;padding:24px;color:var(--foam);display:none;}
+  .voice-hint{font-size:12px;color:#5a7a90;margin-top:6px;}
 </style>
 </head>
 <body>
@@ -92,10 +99,22 @@
       <input type="range" id="duration" min="15" max="90" step="5" value="30"
              oninput="document.getElementById('dv').textContent=this.value">
     </div>
-    <button type="submit" id="submitBtn" class="btn">توليد السكريبت</button>
+
+    <label style="margin-top:18px;">الصوت (لتوليد الكل)</label>
+    <div class="voice-row">
+      <select id="voiceSelect" disabled>
+        <option>⏳ جاري تحميل الأصوات...</option>
+      </select>
+    </div>
+    <p class="voice-hint" id="voiceHint">جاري تحميل قائمة الأصوات من ElevenLabs...</p>
+
+    <div class="btns">
+      <button type="submit" id="btnScript" class="btn">✍️ سكريبت فقط</button>
+      <button type="button" id="btnFull" class="btn btn-gold" onclick="generateFull()" disabled>🎙️ سكريبت + صوت</button>
+    </div>
   </form>
 
-  <div id="spinner">⏳ جاري التوليد...</div>
+  <div id="spinner"></div>
   <div id="errorBox"></div>
   <div id="resultBox"></div>
 </div>
@@ -103,45 +122,108 @@
 <script>
 var currentScenes = [];
 
-function generateScript(e) {
-  e.preventDefault();
-  var btn = document.getElementById('submitBtn');
-  btn.disabled = true;
-  btn.textContent = '⏳ جاري التوليد...';
+// ─── تحميل الأصوات عند فتح الصفحة ────────────────────────────────────────────
+(function loadVoices() {
+  fetch('/api/voices/')
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      var sel = document.getElementById('voiceSelect');
+      if (!d.ok || !d.voices.length) {
+        sel.innerHTML = '<option>لا توجد أصوات</option>';
+        document.getElementById('voiceHint').textContent = 'تعذّر تحميل الأصوات من ElevenLabs.';
+        return;
+      }
+      sel.innerHTML = d.voices.map(function(v) {
+        return '<option value="' + v.id + '">' + v.name + (v.category ? ' (' + v.category + ')' : '') + '</option>';
+      }).join('');
+      sel.disabled = false;
+      document.getElementById('btnFull').disabled = false;
+      document.getElementById('voiceHint').textContent = d.voices.length + ' صوت متاح — اختار قبل الضغط على "سكريبت + صوت".';
+    })
+    .catch(function() {
+      document.getElementById('voiceHint').textContent = 'تعذّر الاتصال بـ ElevenLabs.';
+    });
+})();
+
+// ─── مشترك ────────────────────────────────────────────────────────────────────
+function getFormData() {
+  return {
+    topic:    document.getElementById('topic').value.trim(),
+    platform: document.getElementById('platform').value,
+    language: document.getElementById('language').value,
+    tone:     document.getElementById('tone').value,
+    duration: parseInt(document.getElementById('duration').value),
+  };
+}
+
+function setLoading(msg) {
+  document.getElementById('spinner').textContent = msg;
   document.getElementById('spinner').style.display = 'block';
   document.getElementById('errorBox').innerHTML = '';
   document.getElementById('resultBox').innerHTML = '';
+  document.getElementById('btnScript').disabled = true;
+  document.getElementById('btnFull').disabled = true;
+}
+
+function clearLoading() {
+  document.getElementById('spinner').style.display = 'none';
+  document.getElementById('btnScript').disabled = false;
+  var sel = document.getElementById('voiceSelect');
+  if (!sel.disabled) document.getElementById('btnFull').disabled = false;
+}
+
+function showError(msg) {
+  document.getElementById('errorBox').innerHTML = '<div class="err">' + msg + '</div>';
+}
+
+// ─── توليد السكريبت فقط ───────────────────────────────────────────────────────
+function generateScript(e) {
+  e.preventDefault();
+  var data = getFormData();
+  if (!data.topic) { showError('اكتب الموضوع الأول'); return; }
+  setLoading('⏳ جاري توليد السكريبت...');
 
   fetch('/api/generate-script/', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      topic:    document.getElementById('topic').value,
-      platform: document.getElementById('platform').value,
-      language: document.getElementById('language').value,
-      tone:     document.getElementById('tone').value,
-      duration: parseInt(document.getElementById('duration').value),
-    })
+    body: JSON.stringify(data),
   })
   .then(function(r){ return r.json(); })
   .then(function(d) {
     if (!d.ok) throw new Error(d.error || 'خطأ غير معروف');
     currentScenes = d.script.scenes;
-    renderResult(d.script);
-    loadVoices();
+    renderResult(d.script, null);
   })
-  .catch(function(err) {
-    document.getElementById('errorBox').innerHTML =
-      '<div class="err">' + err.message + '</div>';
-  })
-  .finally(function() {
-    btn.disabled = false;
-    btn.textContent = 'توليد السكريبت';
-    document.getElementById('spinner').style.display = 'none';
-  });
+  .catch(function(err){ showError(err.message); })
+  .finally(clearLoading);
 }
 
-function renderResult(s) {
+// ─── توليد السكريبت + الصوت مع بعض ───────────────────────────────────────────
+function generateFull() {
+  var data = getFormData();
+  if (!data.topic) { showError('اكتب الموضوع الأول'); return; }
+  var voiceId = document.getElementById('voiceSelect').value;
+  if (!voiceId) { showError('اختار صوت أولاً'); return; }
+
+  setLoading('⏳ جاري توليد السكريبت والصوت... (قد يأخذ 15-30 ثانية)');
+
+  fetch('/api/generate-full/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(Object.assign(data, {voice_id: voiceId})),
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d) {
+    if (!d.ok) throw new Error(d.error || 'خطأ غير معروف');
+    currentScenes = d.script.scenes;
+    renderResult(d.script, d.audio_b64);
+  })
+  .catch(function(err){ showError(err.message); })
+  .finally(clearLoading);
+}
+
+// ─── رسم النتيجة ──────────────────────────────────────────────────────────────
+function renderResult(s, audio_b64) {
   var scenesHtml = s.scenes.map(function(sc) {
     return '<div class="scene">' +
       '<div class="t">' + sc.time + '</div>' +
@@ -155,6 +237,28 @@ function renderResult(s) {
     return '<span class="tag">#' + t + '</span>';
   }).join('');
 
+  var audioHtml = '';
+  if (audio_b64) {
+    var audioSrc = 'data:audio/mpeg;base64,' + audio_b64;
+    audioHtml =
+      '<div class="h2">🎧 التعليق الصوتي</div>' +
+      '<div class="audio-box">' +
+        '<audio controls><source src="' + audioSrc + '" type="audio/mpeg"></audio>' +
+        '<a href="' + audioSrc + '" download="voiceover.mp3">⬇️ تحميل MP3</a>' +
+      '</div>';
+  } else {
+    audioHtml =
+      '<div class="h2" style="margin-top:20px;">🎙️ توليد التعليق الصوتي</div>' +
+      '<div style="display:flex;gap:10px;align-items:center;margin-top:8px;">' +
+        '<select id="voiceSelectResult" style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid #1a3a52;background:#0a1626;color:#e8f4f8;font-size:14px;">' +
+          document.getElementById('voiceSelect').innerHTML +
+        '</select>' +
+        '<button type="button" class="btn btn-gold btn-sm" style="white-space:nowrap;" onclick="generateVoiceResult()">🎧 توليد الصوت</button>' +
+      '</div>' +
+      '<p id="voiceLoadingResult" style="display:none;opacity:.6;font-size:13px;margin-top:8px;">⏳ جاري تحويل النص لصوت...</p>' +
+      '<div id="audioResultBox"></div>';
+  }
+
   document.getElementById('resultBox').innerHTML =
     '<div class="card">' +
       '<div class="meta">' + s.meta.platform + ' · ' + s.meta.language + ' · ' + s.meta.duration + 's · ' + s.meta.size + '</div>' +
@@ -164,41 +268,22 @@ function renderResult(s) {
       '<div class="h2">الكابشن</div>' +
       '<div class="cap">' + s.caption + '</div>' +
       '<div class="tags">' + tagsHtml + '</div>' +
-      '<div class="h2" style="margin-top:20px;">🎙️ توليد التعليق الصوتي</div>' +
-      '<div class="voice-bar" id="voiceBar"><span style="color:var(--foam);font-size:13px;">⏳ جاري تحميل الأصوات...</span></div>' +
-      '<p id="voiceLoading" style="display:none;opacity:.6;font-size:13px;">⏳ جاري تحويل النص لصوت...</p>' +
-      '<div id="audioResult"></div>' +
+      audioHtml +
     '</div>';
 }
 
-function loadVoices() {
-  fetch('/api/voices/')
-  .then(function(r){ return r.json(); })
-  .then(function(d) {
-    if (!d.ok || !d.voices.length) {
-      document.getElementById('voiceBar').innerHTML = '<span style="color:#5a7a90;font-size:13px;">الأصوات غير متاحة</span>';
-      return;
-    }
-    var opts = d.voices.map(function(v) {
-      return '<option value="' + v.id + '">' + v.name + (v.category ? ' (' + v.category + ')' : '') + '</option>';
-    }).join('');
-    document.getElementById('voiceBar').innerHTML =
-      '<select id="voiceSelect" style="flex:1;min-width:180px;margin:0;">' + opts + '</select>' +
-      '<button type="button" class="btn btn-gold btn-sm" onclick="generateVoice()">🎧 توليد الصوت</button>';
-  })
-  .catch(function() {
-    document.getElementById('voiceBar').innerHTML = '<span style="color:#5a7a90;font-size:13px;">تعذّر تحميل الأصوات</span>';
-  });
-}
+// ─── توليد الصوت منفصلاً (بعد سكريبت فقط) ────────────────────────────────────
+function generateVoiceResult() {
+  var sel = document.getElementById('voiceSelectResult');
+  if (!sel) return;
+  var voiceId = sel.value;
+  document.getElementById('voiceLoadingResult').style.display = 'block';
+  document.getElementById('audioResultBox').innerHTML = '';
 
-function generateVoice() {
-  var voiceId = document.getElementById('voiceSelect').value;
-  document.getElementById('voiceLoading').style.display = 'block';
-  document.getElementById('audioResult').innerHTML = '';
   fetch('/api/generate-voice/', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({scenes: currentScenes, voice_id: voiceId})
+    body: JSON.stringify({scenes: currentScenes, voice_id: voiceId}),
   })
   .then(function(r) {
     if (!r.ok) return r.json().then(function(d){ throw new Error(d.error || 'خطأ'); });
@@ -206,15 +291,17 @@ function generateVoice() {
   })
   .then(function(blob) {
     var url = URL.createObjectURL(blob);
-    document.getElementById('audioResult').innerHTML =
-      '<audio controls style="width:100%;margin-top:8px;"><source src="' + url + '" type="audio/mpeg"></audio>' +
-      '<a href="' + url + '" download="voiceover.mp3" class="btn btn-sm" style="display:block;text-align:center;margin-top:8px;text-decoration:none;">⬇️ تحميل MP3</a>';
+    document.getElementById('audioResultBox').innerHTML =
+      '<div class="audio-box">' +
+        '<audio controls><source src="' + url + '" type="audio/mpeg"></audio>' +
+        '<a href="' + url + '" download="voiceover.mp3">⬇️ تحميل MP3</a>' +
+      '</div>';
   })
   .catch(function(err) {
-    document.getElementById('audioResult').innerHTML = '<div class="err">' + err.message + '</div>';
+    document.getElementById('audioResultBox').innerHTML = '<div class="err">' + err.message + '</div>';
   })
   .finally(function() {
-    document.getElementById('voiceLoading').style.display = 'none';
+    document.getElementById('voiceLoadingResult').style.display = 'none';
   });
 }
 </script>

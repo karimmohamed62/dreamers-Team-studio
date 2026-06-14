@@ -2,6 +2,7 @@
 الـ Views - Dreamers Studio
 """
 import json
+import base64
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -78,6 +79,49 @@ def api_generate_voice(request):
             content_type="audio/mpeg",
             headers={"Content-Disposition": 'attachment; filename="voiceover.mp3"'},
         )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_generate_full(request):
+    """
+    POST /api/generate-full/
+    {topic, platform, language, tone, duration, voice_id, settings?}
+    يرجّع السكريبت + الصوت كـ base64 في خطوة واحدة
+    """
+    try:
+        body = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"ok": False, "error": "JSON غير صالح"}, status=400)
+
+    topic    = (body.get("topic") or "").strip()
+    voice_id = (body.get("voice_id") or "").strip()
+
+    if not topic:
+        return JsonResponse({"ok": False, "error": "الموضوع مطلوب"}, status=400)
+    if not voice_id:
+        return JsonResponse({"ok": False, "error": "voice_id مطلوب"}, status=400)
+
+    try:
+        script = generate_script(
+            topic=topic,
+            platform=body.get("platform", "instagram"),
+            language=body.get("language", "ألمانية"),
+            tone=body.get("tone", "حماسي ومغامر"),
+            duration=int(body.get("duration", 30)),
+        )
+        audio_bytes = generate_voiceover(
+            script["scenes"],
+            voice_id,
+            voice_settings=body.get("settings", {}),
+        )
+        return JsonResponse({
+            "ok": True,
+            "script": script,
+            "audio_b64": base64.b64encode(audio_bytes).decode("utf-8"),
+        })
     except Exception as e:
         return JsonResponse({"ok": False, "error": str(e)}, status=500)
 

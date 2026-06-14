@@ -7,5 +7,6 @@ urlpatterns = [
     path("api/generate-script/",   views.api_generate_script,    name="api_generate_script"),
     path("api/voices/",            views.api_list_voices,         name="api_list_voices"),
     path("api/generate-voice/",    views.api_generate_voice,      name="api_generate_voice"),
+    path("api/generate-full/",     views.api_generate_full,       name="api_generate_full"),
     path("api/voice-settings/",    views.api_save_voice_settings, name="api_save_voice_settings"),
 ]
