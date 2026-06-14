@@ -31,7 +31,7 @@ def get_auth_url():
         "access_type":   "offline",
         "prompt":        "consent",
     }
-    print(f"DEBUG REDIRECT_URI: {REDIRECT_URI}")
+    print(f"DEBUG REDIRECT_URI: {REDIRECT_URI}", flush=True)
     url = AUTH_URI + "?" + urlencode(params)
     return url, ""          # state not used but keeps the same signature
 
@@ -45,7 +45,7 @@ def exchange_code(code):
         "redirect_uri":  REDIRECT_URI,
         "grant_type":    "authorization_code",
     }
-    print(f"DEBUG exchange redirect_uri: {REDIRECT_URI}")
+    print(f"DEBUG exchange redirect_uri: {REDIRECT_URI}", flush=True)
     resp = _requests.post(TOKEN_URI, data=data, timeout=15)
     print(f"[Drive OAuth] token response {resp.status_code}: {resp.text[:300]}")
     resp.raise_for_status()
