@@ -97,6 +97,7 @@
     <a href="/">السكريبت</a>
     <a href="/voices/">الأصوات</a>
     <a href="/drive/" class="active">Drive ☁️</a>
+    <a href="/export/">🚀 Export</a>
   </div>
 
   {% if error %}<div class="err">خطأ في تسجيل الدخول: {{ error }}</div>{% endif %}
@@ -256,6 +257,9 @@ function renderFiles(files) {
     var editBtn = isImg
       ? '<button onclick="openEditModal(\'' + f.id + '\',\'' + f.name.replace(/'/g,"\\'") + '\',\'' + (f.thumbnailLink||'').replace(/'/g,"\\'") + '\')">🎨</button>'
       : '';
+    var exportBtn = isImg
+      ? '<a href="/export/?drive_file_id=' + f.id + '&name=' + encodeURIComponent(f.name) + '" title="Export لكل المنصات">🚀</a>'
+      : '';
 
     return '<div class="file-card">' + thumb +
       '<div class="file-info">' +
@@ -266,6 +270,7 @@ function renderFiles(files) {
           '<a href="/api/drive/download/' + f.id + '/" download="' + f.name + '">⬇️</a>' +
           resizeBtn +
           editBtn +
+          exportBtn +
         '</div>' +
       '</div></div>';
   }).join('');

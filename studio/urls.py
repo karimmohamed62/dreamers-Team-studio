@@ -5,6 +5,8 @@ urlpatterns = [
     path("", views.home, name="home"),
     path("voices/", views.voice_settings_page, name="voices"),
     path("drive/", views.drive_page, name="drive"),
+    path("export/", views.export_page, name="export"),
+    path("api/export/", views.api_export, name="api_export"),
     # OAuth
     path("auth/google/", views.drive_login, name="drive_login"),
     path("auth/google/callback/", views.drive_callback, name="drive_callback"),

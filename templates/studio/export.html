@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dreamers Studio · Export</title>
+<style>
+:root{--deep:#060f1e;--primary:#0077b6;--accent:#00b4d8;--foam:#90e0ef;--gold:#f4c430;--card:#0a1626;--border:#1a3a52;--green:#22c55e;}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--deep);color:#e8f4f8;font-family:system-ui,'Segoe UI',Tahoma,sans-serif;line-height:1.6;}
+.wrap{max-width:720px;margin:0 auto;padding:24px 16px 60px;}
+.logo{font-size:32px;}
+h1{font-size:22px;font-weight:600;margin:8px 0 4px;}
+.sub{color:var(--foam);font-size:14px;margin:0 0 4px;}
+.nav{display:flex;gap:16px;margin-bottom:28px;flex-wrap:wrap;}
+.nav a{color:var(--foam);font-size:13px;text-decoration:none;opacity:.7;}
+.nav a:hover,.nav a.active{opacity:1;color:var(--accent);}
+/* Steps */
+.step{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:16px;}
+.step-header{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.step-num{width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.step-title{font-size:15px;font-weight:600;color:var(--foam);}
+.step-badge{font-size:11px;color:#5a7a90;margin-right:auto;}
+/* Inputs */
+label{display:block;font-size:13px;color:var(--foam);margin:12px 0 5px;}
+label:first-child{margin-top:0;}
+input[type=text],select,textarea{width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--deep);color:#e8f4f8;font-size:14px;font-family:inherit;}
+textarea{resize:vertical;min-height:70px;}
+.row{display:flex;gap:10px;}.row>div{flex:1;}
+.rng-row{display:flex;align-items:center;gap:12px;}
+input[type=range]{flex:1;accent-color:var(--accent);}
+/* Image picker */
+.img-pick{display:flex;gap:10px;flex-wrap:wrap;}
+.img-pick-btn{flex:1;min-width:140px;padding:16px;border:2px dashed var(--border);border-radius:10px;text-align:center;cursor:pointer;background:transparent;color:var(--foam);font-size:14px;font-family:inherit;}
+.img-pick-btn:hover{border-color:var(--accent);color:var(--accent);}
+.img-preview{margin-top:12px;display:none;}
+.img-preview img{max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border);}
+input[type=file]{display:none;}
+/* Drive image grid modal */
+#driveModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:300;align-items:flex-start;justify-content:center;padding-top:40px;}
+#driveModal.open{display:flex;}
+.drive-modal-box{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;width:700px;max-width:95vw;max-height:80vh;overflow-y:auto;}
+.drive-modal-box h3{margin:0 0 14px;font-size:15px;}
+.drive-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:10px;}
+.drive-img-card{border:2px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer;transition:border-color .2s;}
+.drive-img-card:hover{border-color:var(--accent);}
+.drive-img-card img{width:100%;height:90px;object-fit:cover;display:block;}
+.drive-img-card p{font-size:11px;padding:4px 6px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* Platforms */
+.platforms-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.plat-check{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;}
+.plat-check:hover{border-color:var(--accent);}
+.plat-check input{accent-color:var(--accent);width:16px;height:16px;cursor:pointer;}
+.plat-check span{font-size:13px;}
+.plat-check small{color:#5a7a90;font-size:11px;margin-right:auto;}
+/* Progress */
+#progressBox{display:none;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:16px;}
+.progress-bar{height:6px;background:var(--border);border-radius:4px;overflow:hidden;margin:12px 0;}
+.progress-fill{height:100%;background:var(--accent);border-radius:4px;transition:width .4s;}
+.progress-steps{list-style:none;padding:0;margin:0;}
+.progress-steps li{font-size:13px;padding:4px 0;color:#5a7a90;}
+.progress-steps li.active{color:var(--foam);}
+.progress-steps li.done{color:var(--green);}
+/* Result */
+#resultBox{display:none;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:16px;}
+.result-folder{background:rgba(0,180,216,.1);border:1px solid var(--accent);border-radius:10px;padding:14px;margin-bottom:14px;text-align:center;}
+.result-folder a{color:var(--accent);font-size:16px;font-weight:600;text-decoration:none;}
+.result-folder a:hover{text-decoration:underline;}
+.files-list{list-style:none;padding:0;margin:0 0 14px;}
+.files-list li{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.files-list li:last-child{border-bottom:none;}
+.files-list a{color:var(--accent);text-decoration:none;font-size:12px;margin-right:auto;}
+.files-list .err-tag{color:#ffb4b4;font-size:11px;}
+.caption-box{background:var(--deep);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:13px;white-space:pre-wrap;max-height:200px;overflow-y:auto;margin-bottom:10px;}
+.tags-row{display:flex;flex-wrap:wrap;gap:6px;}
+.tag{display:inline-block;background:rgba(0,119,182,.25);color:var(--foam);font-size:12px;padding:3px 10px;border-radius:6px;}
+.copy-btn{padding:6px 14px;font-size:12px;border:1px solid var(--border);background:transparent;color:var(--foam);border-radius:6px;cursor:pointer;}
+.copy-btn:hover{border-color:var(--accent);color:var(--accent);}
+.warn-box{background:rgba(244,196,48,.1);border:1px solid var(--gold);border-radius:8px;padding:10px;margin-bottom:12px;font-size:13px;color:var(--gold);}
+/* Export button */
+.export-btn{width:100%;margin-top:20px;padding:16px;border:none;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;font-size:17px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:.5px;}
+.export-btn:hover{opacity:.9;}
+.export-btn:disabled{opacity:.5;cursor:wait;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">🐬</div>
+  <h1>Dreamers Studio</h1>
+  <p class="sub">محطة توليد محتوى السوشيال ميديا</p>
+  <div class="nav">
+    <a href="/">السكريبت</a>
+    <a href="/voices/">الأصوات</a>
+    <a href="/drive/">Drive ☁️</a>
+    <a href="/export/" class="active">🚀 Export</a>
+  </div>
+
+  <form id="exportForm" onsubmit="startExport(event)">
+
+    <!-- Step 1: Image -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">1</div>
+        <div class="step-title">اختار الصورة</div>
+      </div>
+      <div class="img-pick">
+        <button type="button" class="img-pick-btn" onclick="openDriveModal()">☁️ من Drive</button>
+        <button type="button" class="img-pick-btn" onclick="document.getElementById('localFile').click()">⬆️ رفع من الجهاز</button>
+      </div>
+      <input type="file" id="localFile" accept="image/*" onchange="handleLocalFile(this)">
+      <input type="hidden" id="driveFileId" name="drive_file_id">
+      <div class="img-preview" id="imgPreview">
+        <img id="previewImg" src="" alt="preview">
+        <p id="imgLabel" style="font-size:12px;color:#5a7a90;margin-top:6px;"></p>
+      </div>
+    </div>
+
+    <!-- Step 2: AI Edit (optional) -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">2</div>
+        <div class="step-title">تعديل AI بـ Nano Banana</div>
+        <span class="step-badge">اختياري</span>
+      </div>
+      <textarea id="aiInstruction" name="ai_instruction" placeholder='مثال: "اجعل الألوان أكثر إشراقاً" أو "أضيف شعار Dreamers Team"'></textarea>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+        <button type="button" class="copy-btn" onclick="setAI('أضيف شعار Dreamers Team باللون الذهبي في الأسفل')">✨ شعار</button>
+        <button type="button" class="copy-btn" onclick="setAI('اجعل الألوان أكثر إشراقاً وحيوية')">🌈 ألوان</button>
+        <button type="button" class="copy-btn" onclick="setAI('أضيف تأثير غروب الشمس')">🌅 غروب</button>
+        <button type="button" class="copy-btn" onclick="setAI('احذف الخلفية واجعلها بيضاء')">🪄 خلفية</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Content Settings -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">3</div>
+        <div class="step-title">إعدادات المحتوى</div>
+      </div>
+      <label>موضوع البوست</label>
+      <input type="text" name="topic" id="topic" placeholder="مثال: رحلة دولفين VIP في الغردقة" required>
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>المنصة (للسكريبت)</label>
+          <select name="platform">
+            {% for key, spec in platforms.items %}
+            <option value="{{ key }}">{{ spec.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>اللغة</label>
+          <select name="language">
+            <option>ألمانية</option>
+            <option>إنجليزية</option>
+            <option>إيطالية</option>
+            <option>عربية</option>
+          </select>
+        </div>
+      </div>
+      <label>الأسلوب</label>
+      <select name="tone">
+        <option>حماسي ومغامر</option>
+        <option>فاخر وهادئ</option>
+        <option>عائلي ودافئ</option>
+        <option>معلوماتي</option>
+      </select>
+      <label>طول الفيديو: <span id="durVal">30</span>s</label>
+      <div class="rng-row">
+        <input type="range" name="duration" min="15" max="90" step="5" value="30" oninput="document.getElementById('durVal').textContent=this.value">
+      </div>
+    </div>
+
+    <!-- Step 4: Platforms -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">4</div>
+        <div class="step-title">اختار المنصات</div>
+      </div>
+      <div class="platforms-grid">
+        <label class="plat-check"><input type="checkbox" name="platforms[]" value="instagram_reel" checked><span>📱 Instagram Reel</span><small>9:16</small></label>
+        <label class="plat-check"><input type="checkbox" name="platforms[]" value="instagram_feed" checked><span>🖼️ Instagram Feed</span><small>4:5</small></label>
+        <label class="plat-check"><input type="checkbox" name="platforms[]" value="tiktok" checked><span>🎵 TikTok</span><small>9:16</small></label>
+        <label class="plat-check"><input type="checkbox" name="platforms[]" value="facebook_reel" checked><span>📘 Facebook Reel</span><small>9:16</small></label>
+        <label class="plat-check"><input type="checkbox" name="platforms[]" value="youtube_short"><span>▶️ YouTube Short</span><small>9:16</small></label>
+        <label class="plat-check"><input type="checkbox" name="platforms[]" value="youtube_long"><span>🎬 YouTube Long</span><small>16:9</small></label>
+        <label class="plat-check"><input type="checkbox" name="platforms[]" value="facebook_feed"><span>📘 Facebook Feed</span><small>1:1</small></label>
+      </div>
+    </div>
+
+    <!-- Step 5: Voice -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">5</div>
+        <div class="step-title">الصوت</div>
+        <span class="step-badge">اختياري</span>
+      </div>
+      <label>اختار صوت ElevenLabs</label>
+      <select name="voice_id" id="voiceSelect">
+        <option value="">⏳ جاري تحميل الأصوات...</option>
+      </select>
+    </div>
+
+    <button type="submit" class="export-btn" id="exportBtn">🚀 Export لكل المنصات</button>
+  </form>
+
+  <!-- Progress -->
+  <div id="progressBox">
+    <div style="font-size:15px;font-weight:600;margin-bottom:8px;">⏳ جاري التنفيذ...</div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <ul class="progress-steps" id="progressSteps">
+      <li id="ps1">1. جلب الصورة</li>
+      <li id="ps2">2. توليد السكريبت بـ Gemini</li>
+      <li id="ps3">3. توليد الصوت بـ ElevenLabs</li>
+      <li id="ps4">4. Resize لكل المنصات + رفع على Drive</li>
+    </ul>
+  </div>
+
+  <!-- Result -->
+  <div id="resultBox">
+    <div id="warningsBox"></div>
+    <div class="result-folder">
+      <div style="font-size:12px;color:#5a7a90;margin-bottom:6px;">تم الرفع على Drive ✅</div>
+      <a id="folderLink" href="#" target="_blank">📁 فتح الفولدر</a>
+      <div id="folderName" style="font-size:12px;color:#5a7a90;margin-top:4px;"></div>
+    </div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--foam);">الملفات اللي اترفعت:</div>
+    <ul class="files-list" id="filesList"></ul>
+    <div style="font-size:13px;font-weight:600;margin:12px 0 6px;color:var(--foam);">الكابشن:
+      <button class="copy-btn" onclick="copyCaption()" style="float:left;">نسخ 📋</button>
+    </div>
+    <div class="caption-box" id="captionBox"></div>
+    <div class="tags-row" id="tagsRow"></div>
+  </div>
+</div>
+
+<!-- Drive image picker modal -->
+<div id="driveModal">
+  <div class="drive-modal-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <h3 style="margin:0;">☁️ اختار صورة من Drive</h3>
+      <button onclick="closeDriveModal()" style="background:transparent;border:none;color:#e8f4f8;font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <div id="driveGridLoading" style="text-align:center;padding:30px;color:var(--foam);">⏳ جاري تحميل الصور...</div>
+    <div class="drive-grid" id="driveGrid"></div>
+  </div>
+</div>
+
+<script>
+var localImageBytes = null;
+var selectedDriveId = '';
+
+// ─── Pre-select Drive image from URL params ───────────────────────────────────
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  var fid  = params.get('drive_file_id');
+  var name = params.get('name') || 'صورة من Drive';
+  if (fid) {
+    selectedDriveId = fid;
+    document.getElementById('driveFileId').value = fid;
+    document.getElementById('previewImg').src = '';
+    document.getElementById('imgLabel').textContent = '☁️ ' + name + ' (من Drive)';
+    document.getElementById('imgPreview').style.display = 'block';
+    // Try to load thumbnail
+    fetch('/api/drive/files/').then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok) return;
+      var f = d.files.find(function(x){ return x.id === fid; });
+      if (f && f.thumbnailLink) document.getElementById('previewImg').src = f.thumbnailLink;
+    }).catch(function(){});
+  }
+})();
+
+// ─── Load voices ─────────────────────────────────────────────────────────────
+fetch('/api/voices/')
+  .then(function(r){ return r.json(); })
+  .then(function(d) {
+    var sel = document.getElementById('voiceSelect');
+    if (!d.ok || !d.voices.length) {
+      sel.innerHTML = '<option value="">لا توجد أصوات</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">— بدون صوت —</option>' +
+      d.voices.map(function(v){
+        return '<option value="'+v.id+'">'+v.name+(v.category?' ('+v.category+')':'')+'</option>';
+      }).join('');
+  })
+  .catch(function(){ document.getElementById('voiceSelect').innerHTML='<option value="">تعذّر التحميل</option>'; });
+
+// ─── Image from local ─────────────────────────────────────────────────────────
+function handleLocalFile(input) {
+  if (!input.files.length) return;
+  var file = input.files[0];
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    document.getElementById('previewImg').src = e.target.result;
+    document.getElementById('imgLabel').textContent = file.name + ' (' + Math.round(file.size/1024) + ' KB)';
+    document.getElementById('imgPreview').style.display = 'block';
+    document.getElementById('driveFileId').value = '';
+    selectedDriveId = '';
+    localImageBytes = file;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ─── Drive image picker ───────────────────────────────────────────────────────
+function openDriveModal() {
+  document.getElementById('driveModal').classList.add('open');
+  document.getElementById('driveGrid').innerHTML = '';
+  document.getElementById('driveGridLoading').style.display = 'block';
+  fetch('/api/drive/files/')
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      document.getElementById('driveGridLoading').style.display = 'none';
+      if (!d.ok || !d.files.length) {
+        document.getElementById('driveGridLoading').textContent = 'لا توجد صور.';
+        document.getElementById('driveGridLoading').style.display = 'block';
+        return;
+      }
+      var imgs = d.files.filter(function(f){ return f.mimeType.startsWith('image/'); });
+      if (!imgs.length) {
+        document.getElementById('driveGridLoading').textContent = 'لا توجد صور في Drive.';
+        document.getElementById('driveGridLoading').style.display = 'block';
+        return;
+      }
+      document.getElementById('driveGrid').innerHTML = imgs.map(function(f){
+        var thumb = f.thumbnailLink || '';
+        return '<div class="drive-img-card" onclick="selectDriveImage(\''+f.id+'\',\''+f.name.replace(/'/g,"\\'")+'\',\''+thumb.replace(/'/g,"\\'")+'\')">'+
+          (thumb ? '<img src="'+thumb+'" loading="lazy">' : '<div style="height:90px;background:#0d1f30;display:flex;align-items:center;justify-content:center;font-size:28px;">🖼️</div>')+
+          '<p>'+f.name+'</p></div>';
+      }).join('');
+    })
+    .catch(function(){ document.getElementById('driveGridLoading').textContent = 'سجّل دخولك على Drive أولاً.'; });
+}
+function closeDriveModal() { document.getElementById('driveModal').classList.remove('open'); }
+document.getElementById('driveModal').addEventListener('click', function(e){ if(e.target===this) closeDriveModal(); });
+
+function selectDriveImage(fileId, fileName, thumbUrl) {
+  selectedDriveId = fileId;
+  document.getElementById('driveFileId').value = fileId;
+  document.getElementById('previewImg').src = thumbUrl;
+  document.getElementById('imgLabel').textContent = '☁️ ' + fileName + ' (من Drive)';
+  document.getElementById('imgPreview').style.display = 'block';
+  localImageBytes = null;
+  document.getElementById('localFile').value = '';
+  closeDriveModal();
+}
+
+function setAI(text) { document.getElementById('aiInstruction').value = text; }
+
+// ─── Progress helpers ─────────────────────────────────────────────────────────
+function setStep(n, pct) {
+  var ids = ['ps1','ps2','ps3','ps4'];
+  ids.forEach(function(id, i){
+    var el = document.getElementById(id);
+    el.className = i < n-1 ? 'done' : i === n-1 ? 'active' : '';
+    if (i < n-1) el.textContent = '✅ ' + el.textContent.replace(/^[✅⏳]\s*/,'');
+    if (i === n-1) el.textContent = '⏳ ' + el.textContent.replace(/^[✅⏳]\s*/,'');
+  });
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+// ─── Export ───────────────────────────────────────────────────────────────────
+function startExport(e) {
+  e.preventDefault();
+  if (!selectedDriveId && !localImageBytes) {
+    alert('اختار صورة أولاً (من Drive أو من جهازك)');
+    return;
+  }
+
+  document.getElementById('exportBtn').disabled = true;
+  document.getElementById('progressBox').style.display = 'block';
+  document.getElementById('resultBox').style.display = 'none';
+  setStep(1, 10);
+
+  var form = new FormData(document.getElementById('exportForm'));
+
+  // Add local image file if selected
+  if (localImageBytes) {
+    form.set('image', localImageBytes);
+    form.delete('drive_file_id');
+  }
+
+  // Simulate step progression during fetch
+  var stepTimer = null;
+  var currentStep = 1;
+  function advanceStep() {
+    currentStep++;
+    if (currentStep <= 4) setStep(currentStep, currentStep * 22);
+  }
+  stepTimer = setInterval(advanceStep, 8000); // rough timing
+
+  setStep(1, 15);
+
+  fetch('/api/export/', { method: 'POST', body: form })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      clearInterval(stepTimer);
+      document.getElementById('progressFill').style.width = '100%';
+      ['ps1','ps2','ps3','ps4'].forEach(function(id){
+        var el = document.getElementById(id);
+        el.className = 'done';
+        el.textContent = '✅ ' + el.textContent.replace(/^[✅⏳]\s*/,'');
+      });
+
+      if (!d.ok) {
+        document.getElementById('progressBox').innerHTML +=
+          '<div style="color:#ffb4b4;margin-top:12px;font-size:14px;">❌ خطأ: ' + d.error + '</div>';
+        document.getElementById('exportBtn').disabled = false;
+        return;
+      }
+      showResult(d);
+    })
+    .catch(function(err) {
+      clearInterval(stepTimer);
+      document.getElementById('progressBox').innerHTML +=
+        '<div style="color:#ffb4b4;margin-top:12px;font-size:14px;">❌ ' + err.message + '</div>';
+      document.getElementById('exportBtn').disabled = false;
+    });
+}
+
+function showResult(d) {
+  document.getElementById('resultBox').style.display = 'block';
+
+  // Warnings
+  var wb = document.getElementById('warningsBox');
+  wb.innerHTML = (d.warnings || []).map(function(w){
+    return '<div class="warn-box">⚠️ ' + w + '</div>';
+  }).join('');
+
+  // Folder link
+  document.getElementById('folderLink').href = d.folder_link;
+  document.getElementById('folderName').textContent = d.folder_name;
+
+  // Files list
+  var icons = {jpg:'🖼️', mp3:'🎵', txt:'📝'};
+  document.getElementById('filesList').innerHTML = (d.files || []).map(function(f){
+    var ext  = f.name.split('.').pop();
+    var icon = icons[ext] || '📄';
+    var link = f.link ? '<a href="'+f.link+'" target="_blank">فتح ↗</a>' : '';
+    var err  = f.error ? '<span class="err-tag">❌ '+f.error+'</span>' : '';
+    return '<li>'+icon+' '+f.name+' '+link+err+'</li>';
+  }).join('');
+
+  // Caption + hashtags
+  document.getElementById('captionBox').textContent = d.caption || '';
+  document.getElementById('tagsRow').innerHTML = (d.hashtags || []).map(function(t){
+    return '<span class="tag">#'+t+'</span>';
+  }).join('');
+
+  document.getElementById('exportBtn').disabled = false;
+  document.getElementById('resultBox').scrollIntoView({behavior:'smooth'});
+}
+
+function copyCaption() {
+  var text = document.getElementById('captionBox').textContent;
+  var tags = Array.from(document.querySelectorAll('#tagsRow .tag')).map(function(t){ return t.textContent; }).join(' ');
+  navigator.clipboard.writeText(text + '\n\n' + tags).then(function(){
+    var btn = event.target; btn.textContent = 'تم ✅';
+    setTimeout(function(){ btn.textContent = 'نسخ 📋'; }, 2000);
+  });
+}
+</script>
+</body>
+</html>

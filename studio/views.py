@@ -381,6 +381,116 @@ def api_drive_download(request, file_id):
         return JsonResponse({"ok": False, "error": str(e)}, status=500)
 
 
+# ─── Export ───────────────────────────────────────────────────────────────────
+
+def export_page(request):
+    """صفحة Export المتكاملة."""
+    return render(request, "studio/export.html", {"platforms": PLATFORM_SPECS})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_export(request):
+    """
+    POST /api/export/
+    multipart/form-data:
+      image (file, optional)  |  drive_file_id (optional)
+      topic, platform, language, tone, duration
+      voice_id (optional)
+      platforms[] — list of target platforms
+      ai_instruction (optional)
+    Returns JSON with folder_link, files, script, caption.
+    """
+    tokens = request.session.get("drive_tokens")
+
+    # ── 0. Early Drive check ──────────────────────────────────────────────────
+    if not tokens:
+        return JsonResponse({"ok": False, "error": "سجّل دخولك على Drive أولاً من صفحة /drive/"}, status=401)
+
+    # ── 1. Get image ──────────────────────────────────────────────────────────
+    image_bytes = None
+    if request.FILES.get("image"):
+        image_bytes = request.FILES["image"].read()
+    elif request.POST.get("drive_file_id") and tokens:
+        from .drive_service import download_file as drive_dl
+        try:
+            image_bytes = drive_dl(tokens["token"], request.POST["drive_file_id"])
+        except Exception as e:
+            return JsonResponse({"ok": False, "step": "image", "error": str(e)}, status=500)
+
+    if not image_bytes:
+        return JsonResponse({"ok": False, "error": "صورة مطلوبة (upload أو drive_file_id)"}, status=400)
+
+    # ── 2. AI edit (optional) ─────────────────────────────────────────────────
+    ai_instruction = (request.POST.get("ai_instruction") or "").strip()
+    ai_warning     = None
+    if ai_instruction:
+        from .image_service import edit_image
+        try:
+            image_bytes = edit_image(image_bytes, ai_instruction)
+        except Exception as e:
+            ai_warning = f"Nano Banana فشل ({e}) — متابع بالصورة الأصلية"
+
+    # ── 3. Generate script ────────────────────────────────────────────────────
+    topic    = (request.POST.get("topic") or "").strip()
+    if not topic:
+        return JsonResponse({"ok": False, "error": "الموضوع مطلوب"}, status=400)
+    try:
+        script = generate_script(
+            topic=topic,
+            platform=request.POST.get("platform", "instagram"),
+            language=request.POST.get("language", "ألمانية"),
+            tone=request.POST.get("tone", "حماسي ومغامر"),
+            duration=int(request.POST.get("duration", 30)),
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "step": "script", "error": str(e)}, status=500)
+
+    # ── 4. Generate voice (optional) ──────────────────────────────────────────
+    audio_bytes   = None
+    voice_warning = None
+    voice_id      = (request.POST.get("voice_id") or "").strip()
+    if voice_id:
+        try:
+            audio_bytes = generate_voiceover(script["scenes"], voice_id)
+        except Exception as e:
+            voice_warning = f"ElevenLabs فشل ({e}) — بدون صوت"
+
+    # ── 5. Export to Drive ────────────────────────────────────────────────────
+    import datetime
+    slug = topic[:20].replace(" ", "_")
+    folder_name = f"Dreamers_{datetime.date.today().strftime('%Y%m%d')}_{slug}"
+
+    raw_platforms = request.POST.getlist("platforms[]") or request.POST.getlist("platforms")
+    if not raw_platforms:
+        raw_platforms = ["instagram_reel", "instagram_feed", "tiktok"]
+
+    from .export_service import create_export_package
+    try:
+        export = create_export_package(
+            image_bytes=image_bytes,
+            script=script,
+            audio_bytes=audio_bytes,
+            platforms=raw_platforms,
+            access_token=tokens["token"],
+            folder_name=folder_name,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "step": "drive", "error": str(e)}, status=500)
+
+    warnings = [w for w in [ai_warning, voice_warning] if w]
+    return JsonResponse({
+        "ok":          True,
+        "folder_link": export["folder_link"],
+        "folder_name": folder_name,
+        "files":       export["files"],
+        "script":      script,
+        "caption":     script.get("caption", ""),
+        "hashtags":    script.get("hashtags", []),
+        "warnings":    warnings,
+    })
+
+
 def voice_settings_page(request):
     """صفحة التحكم في إعدادات الأصوات"""
     voices = []
