@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dreamers Studio · إعدادات الأصوات</title>
+<style>
+  :root{--deep:#060f1e;--primary:#0077b6;--accent:#00b4d8;--foam:#90e0ef;--gold:#f4c430;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--deep);color:#e8f4f8;font-family:system-ui,sans-serif;line-height:1.6;}
+  .wrap{max-width:700px;margin:0 auto;padding:24px 16px;}
+  h1{font-size:22px;font-weight:600;margin:8px 0 4px;}
+  .sub{color:var(--foam);font-size:14px;margin:0 0 4px;}
+  .nav{display:flex;gap:16px;margin-bottom:24px;}
+  .nav a{color:var(--foam);font-size:13px;text-decoration:none;opacity:.7;}
+  .nav a.active,.nav a:hover{opacity:1;color:var(--accent);}
+  .err{background:#3a1212;border:1px solid #6e2020;color:#ffb4b4;padding:12px;border-radius:8px;margin:16px 0;font-size:14px;}
+  .voice-card{background:#0a1626;border:1px solid #1a3a52;border-radius:12px;padding:18px;margin-bottom:16px;}
+  .voice-header{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+  .voice-name{font-weight:600;font-size:16px;flex:1;}
+  .voice-cat{font-size:12px;color:#5a7a90;background:#0d1f30;padding:3px 8px;border-radius:4px;}
+  .voice-id{font-size:11px;color:#2a4a60;margin-top:2px;}
+  .slider-group{margin-bottom:14px;}
+  .slider-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .slider-label span{font-size:13px;color:var(--foam);}
+  .slider-label .val{font-size:13px;font-weight:600;color:var(--accent);min-width:36px;text-align:left;}
+  .slider-hint{font-size:11px;color:#3a5a70;margin-top:2px;}
+  input[type=range]{width:100%;accent-color:var(--accent);height:4px;}
+  .slider-ends{display:flex;justify-content:space-between;font-size:10px;color:#3a5a70;margin-top:2px;}
+  .actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;}
+  .btn{padding:9px 18px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
+  .btn-primary{background:var(--primary);color:#fff;}
+  .btn-primary:hover{background:var(--accent);}
+  .btn-gold{background:rgba(244,196,48,.15);border:1px solid var(--gold);color:var(--gold);}
+  .btn-gold:hover{background:rgba(244,196,48,.25);}
+  .btn-ghost{background:transparent;border:1px solid #1a3a52;color:var(--foam);}
+  .btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+  .btn:disabled{opacity:.5;cursor:wait;}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0d4a1a;border:1px solid #1a8a2a;color:#90e0a0;padding:10px 20px;border-radius:8px;font-size:14px;display:none;z-index:999;}
+  .toast.err-toast{background:#3a1212;border-color:#6e2020;color:#ffb4b4;}
+  audio{width:100%;margin-top:10px;border-radius:6px;}
+  .divider{border:none;border-top:1px solid #1a3a52;margin:14px 0;}
+  .model-select{width:100%;padding:8px 10px;border-radius:6px;border:1px solid #1a3a52;background:#060f1e;color:#e8f4f8;font-size:13px;margin-bottom:4px;}
+  .section-title{font-size:11px;color:#5a7a90;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="font-size:28px;">🐬</div>
+  <h1>Dreamers Studio</h1>
+  <p class="sub">إعدادات الأصوات</p>
+  <div class="nav">
+    <a href="/">السكريبت</a>
+    <a href="/voices/" class="active">الأصوات</a>
+  </div>
+
+  {% if error %}<div class="err">{{ error }}</div>{% endif %}
+  {% if not voices %}<div class="err">تأكد من ELEVENLABS_API_KEY في .env</div>{% endif %}
+
+  {% for v in voices %}
+  <div class="voice-card" id="card-{{ forloop.counter }}">
+    <div class="voice-header">
+      <div>
+        <div class="voice-name">{{ v.name }}</div>
+        <div class="voice-id">ID: {{ v.id }}</div>
+      </div>
+      {% if v.category %}<span class="voice-cat">{{ v.category }}</span>{% endif %}
+    </div>
+
+    {% if v.preview_url %}
+    <audio controls src="{{ v.preview_url }}"></audio>
+    {% endif %}
+
+    <hr class="divider">
+    <div class="section-title">موديل التوليد</div>
+    <select class="model-select" id="model-{{ forloop.counter }}">
+      <option value="eleven_multilingual_v2">Multilingual v2 — أفضل لألماني/إيطالي/عربي</option>
+      <option value="eleven_flash_v2_5">Flash v2.5 — أسرع (زمن استجابة أقل)</option>
+      <option value="eleven_v3">v3 — أحدث وأكثر تعبيراً</option>
+    </select>
+
+    <hr class="divider">
+    <div class="section-title">إعدادات الصوت</div>
+
+    <!-- Stability -->
+    <div class="slider-group">
+      <div class="slider-label">
+        <span>🎯 الثبات (Stability)</span>
+        <span class="val" id="stab-val-{{ forloop.counter }}">{{ v.settings.stability }}</span>
+      </div>
+      <input type="range" min="0" max="1" step="0.01"
+             value="{{ v.settings.stability }}"
+             oninput="updateVal('stab-val-{{ forloop.counter }}', this.value)"
+             id="stab-{{ forloop.counter }}">
+      <div class="slider-ends"><span>متقلب وتعبيري</span><span>ثابت ومتسق</span></div>
+      <div class="slider-hint">أعلى = صوت أكثر ثبات واتساق. أقل = أكثر تعبيراً وعاطفة.</div>
+    </div>
+
+    <!-- Similarity -->
+    <div class="slider-group">
+      <div class="slider-label">
+        <span>🎭 التشابه (Similarity)</span>
+        <span class="val" id="sim-val-{{ forloop.counter }}">{{ v.settings.similarity_boost }}</span>
+      </div>
+      <input type="range" min="0" max="1" step="0.01"
+             value="{{ v.settings.similarity_boost }}"
+             oninput="updateVal('sim-val-{{ forloop.counter }}', this.value)"
+             id="sim-{{ forloop.counter }}">
+      <div class="slider-ends"><span>أقل التزاماً</span><span>مطابق للصوت الأصلي</span></div>
+      <div class="slider-hint">أعلى = يحاول يطابق الصوت الأصلي أكتر. لو ظهر noise، قلّله شوية.</div>
+    </div>
+
+    <!-- Style -->
+    <div class="slider-group">
+      <div class="slider-label">
+        <span>🎨 الأسلوب (Style)</span>
+        <span class="val" id="style-val-{{ forloop.counter }}">{{ v.settings.style }}</span>
+      </div>
+      <input type="range" min="0" max="1" step="0.01"
+             value="{{ v.settings.style }}"
+             oninput="updateVal('style-val-{{ forloop.counter }}', this.value)"
+             id="style-{{ forloop.counter }}">
+      <div class="slider-ends"><span>طبيعي</span><span>مبالغ في الأسلوب</span></div>
+      <div class="slider-hint">بيزيد التعبير والأسلوب — مناسب للمحتوى الحماسي. بياكل كريديت أكتر.</div>
+    </div>
+
+    <!-- Speed -->
+    <div class="slider-group">
+      <div class="slider-label">
+        <span>⚡ السرعة (Speed)</span>
+        <span class="val" id="speed-val-{{ forloop.counter }}">{{ v.settings.speed }}</span>
+      </div>
+      <input type="range" min="0.7" max="1.2" step="0.05"
+             value="{{ v.settings.speed }}"
+             oninput="updateVal('speed-val-{{ forloop.counter }}', this.value)"
+             id="speed-{{ forloop.counter }}">
+      <div class="slider-ends"><span>0.7× بطيء</span><span>1.2× سريع</span></div>
+      <div class="slider-hint">1.0 = سرعة طبيعية. للسوشيال ميديا 1.05-1.1 مناسبة.</div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-gold"
+        onclick="saveSettings('{{ v.id }}', {{ forloop.counter }})">
+        💾 حفظ على ElevenLabs
+      </button>
+      <button class="btn btn-ghost"
+        onclick="resetSettings({{ forloop.counter }})">
+        ↺ إعادة تعيين
+      </button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var defaults = {
+  stability: {{ default_settings.stability }},
+  similarity_boost: {{ default_settings.similarity_boost }},
+  style: {{ default_settings.style }},
+  speed: {{ default_settings.speed }}
+};
+
+function updateVal(id, val){
+  document.getElementById(id).textContent = parseFloat(val).toFixed(2);
+}
+
+function resetSettings(i){
+  document.getElementById('stab-'+i).value   = defaults.stability;
+  document.getElementById('sim-'+i).value    = defaults.similarity_boost;
+  document.getElementById('style-'+i).value  = defaults.style;
+  document.getElementById('speed-'+i).value  = defaults.speed;
+  updateVal('stab-val-'+i,  defaults.stability);
+  updateVal('sim-val-'+i,   defaults.similarity_boost);
+  updateVal('style-val-'+i, defaults.style);
+  updateVal('speed-val-'+i, defaults.speed);
+}
+
+function showToast(msg, isErr){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isErr ? ' err-toast' : '');
+  t.style.display = 'block';
+  setTimeout(function(){ t.style.display='none'; }, 3000);
+}
+
+function saveSettings(voiceId, i){
+  var btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '⏳ جاري الحفظ...';
+
+  fetch('/api/voice-settings/', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json', 'X-CSRFToken': getCsrf()},
+    body: JSON.stringify({
+      voice_id:         voiceId,
+      stability:        parseFloat(document.getElementById('stab-'+i).value),
+      similarity_boost: parseFloat(document.getElementById('sim-'+i).value),
+      style:            parseFloat(document.getElementById('style-'+i).value),
+      speed:            parseFloat(document.getElementById('speed-'+i).value),
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if(d.ok) showToast('✅ تم الحفظ على ElevenLabs', false);
+    else     showToast('❌ ' + d.error, true);
+  })
+  .catch(function(e){ showToast('❌ ' + e.message, true); })
+  .then(function(){ btn.disabled=false; btn.textContent='💾 حفظ على ElevenLabs'; });
+}
+
+function getCsrf(){
+  var c = document.cookie.match(/csrftoken=([^;]+)/);
+  return c ? c[1] : '';
+}
+</script>
+</body>
+</html>

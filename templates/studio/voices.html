@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dreamers Studio · الأصوات</title>
+<style>
+  :root{--deep:#060f1e;--primary:#0077b6;--accent:#00b4d8;--foam:#90e0ef;--gold:#f4c430;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--deep);color:#e8f4f8;font-family:system-ui,sans-serif;line-height:1.7;}
+  .wrap{max-width:660px;margin:0 auto;padding:24px 16px;}
+  .logo{font-size:32px;} h1{font-size:22px;font-weight:600;margin:8px 0 4px;}
+  .sub{color:var(--foam);font-size:14px;margin:0 0 4px;}
+  .nav{display:flex;gap:16px;margin-bottom:24px;}
+  .nav a{color:var(--foam);font-size:13px;text-decoration:none;opacity:.7;}
+  .nav a:hover,.nav a.active{opacity:1;color:var(--accent);}
+  .err{background:#3a1212;border:1px solid #6e2020;color:#ffb4b4;padding:12px;border-radius:8px;margin-top:20px;font-size:14px;}
+  .voice-card{background:#0a1626;border:1px solid #1a3a52;border-radius:10px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .voice-info{flex:1;}
+  .voice-name{font-weight:600;font-size:15px;}
+  .voice-cat{font-size:12px;color:#5a7a90;margin-top:2px;}
+  .voice-id{font-size:11px;color:#2a4a60;margin-top:2px;word-break:break-all;}
+  .btn-copy{padding:6px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:6px;font-size:12px;cursor:pointer;}
+  .btn-copy:hover{background:rgba(0,180,216,.1);}
+  audio{width:100%;margin-top:8px;border-radius:6px;}
+  .empty{color:#5a7a90;text-align:center;padding:40px;font-size:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">🐬</div>
+  <h1>Dreamers Studio</h1>
+  <p class="sub">الأصوات المتاحة على حسابك</p>
+  <div class="nav">
+    <a href="/">السكريبت</a>
+    <a href="/voices/" class="active">الأصوات</a>
+  </div>
+
+  {% if error %}<div class="err">{{ error }}</div>
+  {% elif not voices %}<div class="empty">مفيش أصوات متاحة — تأكد من ELEVENLABS_API_KEY في .env</div>
+  {% else %}
+  <p style="font-size:13px;color:#5a7a90;margin-bottom:16px;">{{ voices|length }} صوت متاح — انسخ الـ ID واستخدمه في التوليد</p>
+  {% for v in voices %}
+  <div class="voice-card">
+    <div class="voice-info">
+      <div class="voice-name">{{ v.name }}</div>
+      {% if v.category %}<div class="voice-cat">{{ v.category }}</div>{% endif %}
+      <div class="voice-id">ID: {{ v.id }}</div>
+      {% if v.preview_url %}
+      <audio controls><source src="{{ v.preview_url }}" type="audio/mpeg"></audio>
+      {% endif %}
+    </div>
+    <button class="btn-copy" onclick="navigator.clipboard.writeText('{{ v.id }}');this.textContent='✓ تم النسخ'">نسخ ID</button>
+  </div>
+  {% endfor %}
+  {% endif %}
+</div>
+</body>
+</html>
