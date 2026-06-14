@@ -266,6 +266,59 @@ def api_drive_logout(request):
     return JsonResponse({"ok": True})
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_resize_image(request):
+    """
+    POST /api/resize-image/
+    - multipart: file (image) + platform
+    - JSON:      drive_file_id + platform
+    Returns JPEG image.
+    """
+    tokens = request.session.get("drive_tokens")
+
+    # multipart upload
+    if request.FILES.get("file"):
+        platform = request.POST.get("platform", "instagram_feed")
+        image_bytes = request.FILES["file"].read()
+        source = "upload"
+    else:
+        try:
+            body = json.loads(request.body or "{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"ok": False, "error": "JSON غير صالح"}, status=400)
+        platform      = body.get("platform", "instagram_feed")
+        drive_file_id = (body.get("drive_file_id") or "").strip()
+        if not drive_file_id:
+            return JsonResponse({"ok": False, "error": "file أو drive_file_id مطلوب"}, status=400)
+        if not tokens:
+            return JsonResponse({"ok": False, "error": "غير مسجّل الدخول على Drive"}, status=401)
+        from .drive_service import download_file as drive_dl
+        try:
+            image_bytes = drive_dl(tokens["token"], drive_file_id)
+        except Exception as e:
+            return JsonResponse({"ok": False, "error": f"Drive download: {e}"}, status=500)
+        source = "drive"
+
+    from .resize_service import resize_image, get_platform_info
+    try:
+        result_bytes = resize_image(image_bytes, platform)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=400)
+
+    info = get_platform_info(platform)
+    return HttpResponse(
+        result_bytes,
+        content_type="image/jpeg",
+        headers={
+            "Content-Disposition": f'attachment; filename="resized_{platform}.jpg"',
+            "X-Platform":  platform,
+            "X-Width":     str(info["width"]),
+            "X-Height":    str(info["height"]),
+        },
+    )
+
+
 @require_http_methods(["GET"])
 def api_drive_download(request, file_id):
     """GET /api/drive/download/<file_id>/ — stream file from Drive."""

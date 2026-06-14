@@ -2,60 +2,57 @@
 Google Drive API service — OAuth 2.0 + Drive operations
 """
 import io
+import requests as _requests
+from urllib.parse import urlencode
 from django.conf import settings
-from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 
 REDIRECT_URI = "http://127.0.0.1:8000/auth/google/callback/"
-SCOPES = [
-    "https://www.googleapis.com/auth/drive.file",
-    "https://www.googleapis.com/auth/drive.readonly",
-]
+SCOPES = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly"
+AUTH_URI  = "https://accounts.google.com/o/oauth2/auth"
+TOKEN_URI = "https://oauth2.googleapis.com/token"
 
 MEDIA_MIME_PREFIXES = ("image/", "video/", "audio/")
 
 
-def _flow():
-    return Flow.from_client_config(
-        {
-            "web": {
-                "client_id":     settings.GOOGLE_CLIENT_ID,
-                "client_secret": settings.GOOGLE_CLIENT_SECRET,
-                "auth_uri":      "https://accounts.google.com/o/oauth2/auth",
-                "token_uri":     "https://oauth2.googleapis.com/token",
-                "redirect_uris": [REDIRECT_URI],
-            }
-        },
-        scopes=SCOPES,
-        redirect_uri=REDIRECT_URI,
-    )
-
-
 def get_auth_url():
-    """Returns (auth_url, state)"""
-    flow = _flow()
-    url, state = flow.authorization_url(
-        access_type="offline",
-        include_granted_scopes="true",
-        prompt="consent",
-    )
-    return url, state
+    """Build OAuth URL manually — no PKCE, no code_challenge."""
+    params = {
+        "client_id":     settings.GOOGLE_CLIENT_ID,
+        "redirect_uri":  REDIRECT_URI,
+        "response_type": "code",
+        "scope":         SCOPES,
+        "access_type":   "offline",
+        "prompt":        "consent",
+    }
+    url = AUTH_URI + "?" + urlencode(params)
+    return url, ""          # state not used but keeps the same signature
 
 
 def exchange_code(code):
-    """Exchange authorization code for tokens dict."""
-    flow = _flow()
-    flow.fetch_token(code=code)
-    creds = flow.credentials
+    """Exchange authorization code for tokens — no code_verifier."""
+    data = {
+        "code":          code,
+        "client_id":     settings.GOOGLE_CLIENT_ID,
+        "client_secret": settings.GOOGLE_CLIENT_SECRET,
+        "redirect_uri":  REDIRECT_URI,
+        "grant_type":    "authorization_code",
+    }
+    resp = _requests.post(TOKEN_URI, data=data, timeout=15)
+    print(f"[Drive OAuth] token response {resp.status_code}: {resp.text[:300]}")
+    resp.raise_for_status()
+    j = resp.json()
+    if "error" in j:
+        raise RuntimeError(f"OAuth error: {j['error']} — {j.get('error_description','')}")
     return {
-        "token":         creds.token,
-        "refresh_token": creds.refresh_token,
-        "token_uri":     creds.token_uri,
-        "client_id":     creds.client_id,
-        "client_secret": creds.client_secret,
-        "scopes":        list(creds.scopes or []),
+        "token":         j["access_token"],
+        "refresh_token": j.get("refresh_token", ""),
+        "token_uri":     TOKEN_URI,
+        "client_id":     settings.GOOGLE_CLIENT_ID,
+        "client_secret": settings.GOOGLE_CLIENT_SECRET,
+        "scopes":        SCOPES.split(),
     }
 
 

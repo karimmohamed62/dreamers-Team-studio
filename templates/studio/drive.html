@@ -19,6 +19,7 @@
   .btn:hover{background:var(--accent);}
   .btn:disabled{opacity:.6;cursor:wait;}
   .btn-sm{padding:7px 14px;font-size:13px;}
+  .btn-xs{padding:4px 10px;font-size:11px;}
   .btn-google{background:#fff;color:#333;border:1px solid #ddd;display:flex;align-items:center;gap:10px;margin:0 auto;}
   .btn-google:hover{background:#f5f5f5;}
   .btn-gold{background:rgba(244,196,48,.15);border:1px solid var(--gold);color:var(--gold);}
@@ -46,14 +47,23 @@
   .file-info{padding:8px 10px;}
   .file-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;}
   .file-type{font-size:11px;color:#5a7a90;margin-bottom:6px;}
-  .file-actions{display:flex;gap:6px;}
-  .file-actions a,.file-actions button{flex:1;padding:5px;font-size:12px;text-align:center;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--foam);cursor:pointer;text-decoration:none;}
+  .file-actions{display:flex;gap:4px;flex-wrap:wrap;}
+  .file-actions a,.file-actions button{flex:1;min-width:40px;padding:5px 3px;font-size:11px;text-align:center;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--foam);cursor:pointer;text-decoration:none;}
   .file-actions a:hover,.file-actions button:hover{border-color:var(--accent);color:var(--accent);}
   /* Preview modal */
   #previewModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;align-items:center;justify-content:center;}
   #previewModal.open{display:flex;}
   #previewModal img,#previewModal video{max-width:90vw;max-height:85vh;border-radius:8px;}
   #previewClose{position:fixed;top:16px;left:16px;background:rgba(255,255,255,.1);border:none;color:#fff;font-size:22px;cursor:pointer;border-radius:50%;width:40px;height:40px;}
+  /* Resize modal */
+  #resizeModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:center;justify-content:center;}
+  #resizeModal.open{display:flex;}
+  .resize-box{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;width:360px;max-width:95vw;}
+  .resize-box h3{margin:0 0 16px;font-size:16px;color:var(--foam);}
+  .resize-box select{width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--deep);color:#e8f4f8;font-size:14px;margin-bottom:14px;}
+  .resize-actions{display:flex;gap:10px;margin-top:4px;}
+  .resize-actions button{flex:1;padding:10px;font-size:13px;font-weight:600;border-radius:8px;border:none;cursor:pointer;font-family:inherit;}
+  .resize-status{font-size:12px;color:var(--foam);margin-top:10px;min-height:18px;text-align:center;}
   /* Upload progress */
   .progress-bar{height:4px;background:var(--border);border-radius:4px;margin-top:10px;overflow:hidden;display:none;}
   .progress-fill{height:100%;background:var(--accent);width:0;transition:width .3s;}
@@ -75,7 +85,6 @@
   {% if error %}<div class="err">خطأ في تسجيل الدخول: {{ error }}</div>{% endif %}
 
   {% if not authenticated %}
-  <!-- ══ شاشة تسجيل الدخول ══ -->
   <div class="login-center">
     <div style="font-size:64px;margin-bottom:16px;">☁️</div>
     <h2>ربط Google Drive</h2>
@@ -87,8 +96,6 @@
   </div>
 
   {% else %}
-  <!-- ══ الواجهة الرئيسية ══ -->
-
   <!-- Toolbar -->
   <div class="toolbar">
     <select id="folderSelect" onchange="loadFiles()">
@@ -107,7 +114,6 @@
     <p class="status-msg" id="uploadStatus"></p>
   </div>
 
-  <!-- File grid -->
   <div id="loadingFiles">⏳ جاري تحميل الملفات...</div>
   <div class="grid" id="fileGrid"></div>
 </div>
@@ -118,8 +124,34 @@
   <div id="previewContent"></div>
 </div>
 
+<!-- Resize modal -->
+<div id="resizeModal">
+  <div class="resize-box">
+    <h3>✂️ Resize الصورة</h3>
+    <label style="font-size:12px;color:var(--foam);display:block;margin-bottom:6px;">اختر المنصة:</label>
+    <select id="resizePlatform">
+      <option value="instagram_feed">Instagram Feed (1080×1350 · 4:5)</option>
+      <option value="instagram_reel">Instagram Reel (1080×1920 · 9:16)</option>
+      <option value="tiktok">TikTok (1080×1920 · 9:16)</option>
+      <option value="facebook_reel">Facebook Reel (1080×1920 · 9:16)</option>
+      <option value="facebook_feed">Facebook Feed (1080×1080 · 1:1)</option>
+      <option value="youtube_short">YouTube Short (1080×1920 · 9:16)</option>
+      <option value="youtube_long">YouTube (1920×1080 · 16:9)</option>
+      <option value="twitter">Twitter/X (1600×900 · 16:9)</option>
+    </select>
+    <div class="resize-actions">
+      <button style="background:var(--primary);color:#fff;" onclick="doResize('download')">⬇️ Resize وتحميل</button>
+      <button class="btn-gold" style="background:rgba(244,196,48,.15);border:1px solid var(--gold);color:var(--gold);" onclick="doResize('drive')">☁️ Resize ورفع Drive</button>
+    </div>
+    <p class="resize-status" id="resizeStatus"></p>
+    <button onclick="closeResizeModal()" style="margin-top:12px;width:100%;padding:8px;background:transparent;border:1px solid var(--border);color:var(--foam);border-radius:8px;cursor:pointer;font-size:13px;">إلغاء</button>
+  </div>
+</div>
+
 <script>
 var currentFolder = '';
+var resizeFileId  = '';
+var resizeFileName = '';
 
 // ─── تحميل الفولدرات ─────────────────────────────────────────────────────────
 fetch('/api/drive/folders/')
@@ -129,8 +161,7 @@ fetch('/api/drive/folders/')
     var sel = document.getElementById('folderSelect');
     d.folders.forEach(function(f) {
       var o = document.createElement('option');
-      o.value = f.id;
-      o.textContent = '📁 ' + f.name;
+      o.value = f.id; o.textContent = '📁 ' + f.name;
       sel.appendChild(o);
     });
   });
@@ -140,7 +171,6 @@ function loadFiles() {
   currentFolder = document.getElementById('folderSelect').value;
   document.getElementById('loadingFiles').style.display = 'block';
   document.getElementById('fileGrid').innerHTML = '';
-
   var url = '/api/drive/files/' + (currentFolder ? '?folder_id=' + currentFolder : '');
   fetch(url)
     .then(function(r){ return r.json(); })
@@ -149,14 +179,12 @@ function loadFiles() {
       if (!d.ok) { document.getElementById('loadingFiles').textContent = 'خطأ: ' + d.error; return; }
       if (!d.files.length) {
         document.getElementById('loadingFiles').style.display = 'block';
-        document.getElementById('loadingFiles').textContent = 'لا توجد ملفات في هذا الفولدر.';
+        document.getElementById('loadingFiles').textContent = 'لا توجد ملفات.';
         return;
       }
       renderFiles(d.files);
     })
-    .catch(function(e) {
-      document.getElementById('loadingFiles').textContent = 'خطأ في التحميل: ' + e.message;
-    });
+    .catch(function(e) { document.getElementById('loadingFiles').textContent = 'خطأ: ' + e.message; });
 }
 
 function typeLabel(mime) {
@@ -169,25 +197,31 @@ function typeLabel(mime) {
 function renderFiles(files) {
   var grid = document.getElementById('fileGrid');
   grid.innerHTML = files.map(function(f) {
-    var thumb = f.thumbnailLink
-      ? '<img class="thumb" src="' + f.thumbnailLink + '" alt="' + f.name + '" loading="lazy">'
-      : '<div class="thumb-placeholder">' + (f.mimeType.startsWith('video/') ? '🎬' : f.mimeType.startsWith('audio/') ? '🎵' : '🖼️') + '</div>';
+    var isImg   = f.mimeType.startsWith('image/');
+    var isVideo = f.mimeType.startsWith('video/');
 
-    var previewBtn = (f.mimeType.startsWith('image/') || f.mimeType.startsWith('video/'))
-      ? '<button onclick="preview(\'' + f.id + '\',\'' + f.mimeType + '\')">👁️ عرض</button>'
-      : '<a href="' + (f.webViewLink||'#') + '" target="_blank">🔗 فتح</a>';
+    var thumb = (isImg && f.thumbnailLink)
+      ? '<img class="thumb" src="' + f.thumbnailLink + '" onclick="preview(\'' + f.id + '\',\'' + f.mimeType + '\')" style="cursor:pointer" loading="lazy">'
+      : '<div class="thumb-placeholder">' + (isVideo ? '🎬' : f.mimeType.startsWith('audio/') ? '🎵' : '🖼️') + '</div>';
 
-    return '<div class="file-card">' +
-      (f.mimeType.startsWith('image/') ? '<img class="thumb" src="' + f.thumbnailLink + '" onclick="preview(\'' + f.id + '\',\'' + f.mimeType + '\')" style="cursor:pointer" loading="lazy">' : thumb) +
+    var previewBtn = (isImg || isVideo)
+      ? '<button onclick="preview(\'' + f.id + '\',\'' + f.mimeType + '\')">👁️</button>'
+      : '<a href="' + (f.webViewLink||'#') + '" target="_blank">🔗</a>';
+
+    var resizeBtn = isImg
+      ? '<button onclick="openResizeModal(\'' + f.id + '\',\'' + f.name.replace(/'/g,"\\'") + '\')">✂️</button>'
+      : '';
+
+    return '<div class="file-card">' + thumb +
       '<div class="file-info">' +
         '<div class="file-name" title="' + f.name + '">' + f.name + '</div>' +
         '<div class="file-type">' + typeLabel(f.mimeType) + '</div>' +
         '<div class="file-actions">' +
           previewBtn +
-          '<a href="/api/drive/download/' + f.id + '/" download="' + f.name + '">⬇️ تحميل</a>' +
+          '<a href="/api/drive/download/' + f.id + '/" download="' + f.name + '">⬇️</a>' +
+          resizeBtn +
         '</div>' +
-      '</div>' +
-    '</div>';
+      '</div></div>';
   }).join('');
 }
 
@@ -197,38 +231,30 @@ dz.addEventListener('dragover', function(e){ e.preventDefault(); dz.classList.ad
 dz.addEventListener('dragleave', function(){ dz.classList.remove('drag'); });
 dz.addEventListener('drop', function(e){
   e.preventDefault(); dz.classList.remove('drag');
-  var files = e.dataTransfer.files;
-  if (files.length) uploadFile(files[0]);
+  if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]);
 });
-
-function uploadSelected(input) {
-  if (input.files.length) uploadFile(input.files[0]);
-}
+function uploadSelected(input) { if (input.files.length) uploadFile(input.files[0]); }
 
 function uploadFile(file) {
   var form = new FormData();
   form.append('file', file);
   if (currentFolder) form.append('folder_id', currentFolder);
-
   document.getElementById('progressBar').style.display = 'block';
   document.getElementById('progressFill').style.width = '10%';
   document.getElementById('uploadStatus').textContent = '⏳ جاري الرفع...';
-
-  fetch('/api/drive/upload/', { method: 'POST', body: form })
+  fetch('/api/drive/upload/', {method:'POST', body:form})
     .then(function(r){ return r.json(); })
     .then(function(d) {
       document.getElementById('progressFill').style.width = '100%';
       if (d.ok) {
-        document.getElementById('uploadStatus').textContent = '✅ تم رفع "' + d.file.name + '" بنجاح!';
-        setTimeout(function(){ loadFiles(); }, 1000);
+        document.getElementById('uploadStatus').textContent = '✅ تم رفع "' + d.file.name + '"!';
+        setTimeout(loadFiles, 1000);
       } else {
         document.getElementById('uploadStatus').textContent = '❌ ' + d.error;
       }
     })
-    .catch(function(e) {
-      document.getElementById('uploadStatus').textContent = '❌ ' + e.message;
-    })
-    .finally(function() {
+    .catch(function(e){ document.getElementById('uploadStatus').textContent = '❌ ' + e.message; })
+    .finally(function(){
       setTimeout(function(){
         document.getElementById('progressBar').style.display = 'none';
         document.getElementById('progressFill').style.width = '0';
@@ -238,39 +264,84 @@ function uploadFile(file) {
 
 // ─── Preview ──────────────────────────────────────────────────────────────────
 function preview(fileId, mimeType) {
-  var modal = document.getElementById('previewModal');
   var content = document.getElementById('previewContent');
   content.innerHTML = '<div style="color:#fff;font-size:14px;">⏳ جاري التحميل...</div>';
-  modal.classList.add('open');
-
+  document.getElementById('previewModal').classList.add('open');
   fetch('/api/drive/download/' + fileId + '/')
     .then(function(r){ return r.blob(); })
     .then(function(blob) {
       var url = URL.createObjectURL(blob);
-      if (mimeType.startsWith('image/')) {
-        content.innerHTML = '<img src="' + url + '">';
-      } else if (mimeType.startsWith('video/')) {
-        content.innerHTML = '<video controls autoplay><source src="' + url + '" type="' + mimeType + '"></video>';
-      }
+      content.innerHTML = mimeType.startsWith('image/')
+        ? '<img src="' + url + '">'
+        : '<video controls autoplay><source src="' + url + '" type="' + mimeType + '"></video>';
     })
-    .catch(function(e) {
-      content.innerHTML = '<div style="color:#ffb4b4;">خطأ: ' + e.message + '</div>';
-    });
+    .catch(function(e){ content.innerHTML = '<div style="color:#ffb4b4;">خطأ: ' + e.message + '</div>'; });
 }
-
 function closePreview() {
   document.getElementById('previewModal').classList.remove('open');
   document.getElementById('previewContent').innerHTML = '';
 }
-document.getElementById('previewModal').addEventListener('click', function(e){
-  if (e.target === this) closePreview();
-});
+document.getElementById('previewModal').addEventListener('click', function(e){ if(e.target===this) closePreview(); });
+
+// ─── Resize modal ─────────────────────────────────────────────────────────────
+function openResizeModal(fileId, fileName) {
+  resizeFileId   = fileId;
+  resizeFileName = fileName;
+  document.getElementById('resizeStatus').textContent = '';
+  document.getElementById('resizeModal').classList.add('open');
+}
+function closeResizeModal() {
+  document.getElementById('resizeModal').classList.remove('open');
+}
+document.getElementById('resizeModal').addEventListener('click', function(e){ if(e.target===this) closeResizeModal(); });
+
+function doResize(action) {
+  var platform = document.getElementById('resizePlatform').value;
+  var status   = document.getElementById('resizeStatus');
+  status.textContent = '⏳ جاري الـ Resize...';
+
+  fetch('/api/resize-image/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({drive_file_id: resizeFileId, platform: platform}),
+  })
+  .then(function(r) {
+    if (!r.ok) return r.json().then(function(d){ throw new Error(d.error||'خطأ'); });
+    return r.blob();
+  })
+  .then(function(blob) {
+    if (action === 'download') {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = resizeFileName.replace(/\.[^.]+$/, '') + '_' + platform + '.jpg';
+      a.click();
+      status.textContent = '✅ تم التحميل!';
+    } else {
+      // رفع على Drive في فولدر Dreamers Resized
+      var baseName = resizeFileName.replace(/\.[^.]+$/, '') + '_' + platform + '.jpg';
+      status.textContent = '⏳ جاري الرفع على Drive...';
+      var form = new FormData();
+      form.append('file', blob, baseName);
+      return fetch('/api/drive/upload/', {method:'POST', body:form})
+        .then(function(r2){ return r2.json(); })
+        .then(function(d) {
+          if (d.ok) {
+            status.innerHTML = '✅ تم الرفع! <a href="' + d.file.link + '" target="_blank" style="color:var(--accent);">فتح ↗</a>';
+            setTimeout(loadFiles, 1500);
+          } else {
+            status.textContent = '❌ ' + d.error;
+          }
+        });
+    }
+  })
+  .catch(function(e){ status.textContent = '❌ ' + e.message; });
+}
 
 function logout() {
   fetch('/api/drive/logout/', {method:'POST'}).then(function(){ location.href='/drive/'; });
 }
 
-// تحميل الملفات عند فتح الصفحة
 loadFiles();
 </script>
 {% endif %}

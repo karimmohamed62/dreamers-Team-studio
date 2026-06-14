@@ -15,6 +15,8 @@ urlpatterns = [
     path("api/voices/",            views.api_list_voices,         name="api_list_voices"),
     path("api/generate-voice/",    views.api_generate_voice,      name="api_generate_voice"),
     path("api/voice-settings/",    views.api_save_voice_settings, name="api_save_voice_settings"),
+    # Resize API
+    path("api/resize-image/",              views.api_resize_image,    name="api_resize_image"),
     # Drive API
     path("api/drive/upload/",                  views.api_drive_upload,    name="api_drive_upload"),
     path("api/drive/download/<str:file_id>/",  views.api_drive_download,  name="api_drive_download"),

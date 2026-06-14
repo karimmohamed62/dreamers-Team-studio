@@ -9,3 +9,4 @@ google-auth-oauthlib==1.4.0
 google-auth-httplib2==0.4.0
 google-api-python-client==2.197.0
 requests-toolbelt==1.0.0
+Pillow==12.1.0
