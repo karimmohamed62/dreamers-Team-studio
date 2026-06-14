@@ -64,6 +64,23 @@
   .resize-actions{display:flex;gap:10px;margin-top:4px;}
   .resize-actions button{flex:1;padding:10px;font-size:13px;font-weight:600;border-radius:8px;border:none;cursor:pointer;font-family:inherit;}
   .resize-status{font-size:12px;color:var(--foam);margin-top:10px;min-height:18px;text-align:center;}
+  /* AI Edit modal */
+  #editModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;align-items:center;justify-content:center;}
+  #editModal.open{display:flex;}
+  .edit-box{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;width:460px;max-width:95vw;max-height:90vh;overflow-y:auto;}
+  .edit-box h3{margin:0 0 14px;font-size:16px;color:var(--foam);}
+  .edit-box textarea{width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--deep);color:#e8f4f8;font-size:14px;font-family:inherit;resize:vertical;min-height:80px;margin-bottom:10px;}
+  .edit-examples{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+  .edit-examples button{padding:5px 10px;font-size:12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--foam);cursor:pointer;}
+  .edit-examples button:hover{border-color:var(--accent);color:var(--accent);}
+  .edit-actions{display:flex;gap:10px;}
+  .edit-actions button{flex:1;padding:10px;font-size:13px;font-weight:600;border-radius:8px;border:none;cursor:pointer;font-family:inherit;}
+  .edit-status{font-size:12px;color:var(--foam);margin-top:10px;min-height:18px;text-align:center;}
+  /* Before/After */
+  .before-after{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;}
+  .before-after div{text-align:center;}
+  .before-after span{font-size:11px;color:#5a7a90;display:block;margin-bottom:4px;}
+  .before-after img{width:100%;border-radius:6px;border:1px solid var(--border);}
   /* Upload progress */
   .progress-bar{height:4px;background:var(--border);border-radius:4px;margin-top:10px;overflow:hidden;display:none;}
   .progress-fill{height:100%;background:var(--accent);width:0;transition:width .3s;}
@@ -122,6 +139,31 @@
 <div id="previewModal">
   <button id="previewClose" onclick="closePreview()">✕</button>
   <div id="previewContent"></div>
+</div>
+
+<!-- AI Edit modal -->
+<div id="editModal">
+  <div class="edit-box">
+    <h3>🎨 تعديل AI للصورة</h3>
+    <label style="font-size:12px;color:var(--foam);display:block;margin-bottom:6px;">اكتب التعليمات:</label>
+    <textarea id="editInstruction" placeholder="مثال: أضيف نص Dreamers Team باللون الذهبي في الأسفل"></textarea>
+    <div class="edit-examples">
+      <button onclick="setInstruction('أضيف شعار Dreamers Team باللون الذهبي في أسفل الصورة')">✨ شعار Dreamers</button>
+      <button onclick="setInstruction('اجعل الألوان أكثر إشراقاً وحيوية وتشبعاً')">🌈 ألوان مشرقة</button>
+      <button onclick="setInstruction('أضيف تأثير غروب الشمس بألوان برتقالية وذهبية')">🌅 غروب الشمس</button>
+      <button onclick="setInstruction('احذف الخلفية واجعلها شفافة أو بيضاء')">🪄 احذف الخلفية</button>
+    </div>
+    <div class="edit-actions">
+      <button style="background:var(--primary);color:#fff;" onclick="doEditImage('download')">⬇️ تعديل وتحميل</button>
+      <button style="background:rgba(244,196,48,.15);border:1px solid var(--gold);color:var(--gold);" onclick="doEditImage('drive')">☁️ تعديل ورفع Drive</button>
+    </div>
+    <p class="edit-status" id="editStatus"></p>
+    <div class="before-after" id="beforeAfter" style="display:none;">
+      <div><span>قبل</span><img id="beforeImg" src=""></div>
+      <div><span>بعد</span><img id="afterImg" src=""></div>
+    </div>
+    <button onclick="closeEditModal()" style="margin-top:14px;width:100%;padding:8px;background:transparent;border:1px solid var(--border);color:var(--foam);border-radius:8px;cursor:pointer;font-size:13px;">إغلاق</button>
+  </div>
 </div>
 
 <!-- Resize modal -->
@@ -211,6 +253,9 @@ function renderFiles(files) {
     var resizeBtn = isImg
       ? '<button onclick="openResizeModal(\'' + f.id + '\',\'' + f.name.replace(/'/g,"\\'") + '\')">✂️</button>'
       : '';
+    var editBtn = isImg
+      ? '<button onclick="openEditModal(\'' + f.id + '\',\'' + f.name.replace(/'/g,"\\'") + '\',\'' + (f.thumbnailLink||'').replace(/'/g,"\\'") + '\')">🎨</button>'
+      : '';
 
     return '<div class="file-card">' + thumb +
       '<div class="file-info">' +
@@ -220,6 +265,7 @@ function renderFiles(files) {
           previewBtn +
           '<a href="/api/drive/download/' + f.id + '/" download="' + f.name + '">⬇️</a>' +
           resizeBtn +
+          editBtn +
         '</div>' +
       '</div></div>';
   }).join('');
@@ -340,6 +386,81 @@ function doResize(action) {
 
 function logout() {
   fetch('/api/drive/logout/', {method:'POST'}).then(function(){ location.href='/drive/'; });
+}
+
+// ─── AI Edit modal ────────────────────────────────────────────────────────────
+var editFileId    = '';
+var editFileName  = '';
+var editThumbUrl  = '';
+
+function openEditModal(fileId, fileName, thumbUrl) {
+  editFileId   = fileId;
+  editFileName = fileName;
+  editThumbUrl = thumbUrl;
+  document.getElementById('editInstruction').value = '';
+  document.getElementById('editStatus').textContent = '';
+  document.getElementById('beforeAfter').style.display = 'none';
+  document.getElementById('beforeImg').src = thumbUrl;
+  document.getElementById('afterImg').src  = '';
+  document.getElementById('editModal').classList.add('open');
+}
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('open');
+}
+document.getElementById('editModal').addEventListener('click', function(e){
+  if (e.target === this) closeEditModal();
+});
+function setInstruction(text) {
+  document.getElementById('editInstruction').value = text;
+  document.getElementById('editInstruction').focus();
+}
+
+function doEditImage(action) {
+  var instruction = document.getElementById('editInstruction').value.trim();
+  if (!instruction) { document.getElementById('editStatus').textContent = '⚠️ اكتب التعليمات أولاً'; return; }
+
+  var status = document.getElementById('editStatus');
+  status.textContent = '⏳ جاري التعديل بـ AI... (قد يأخذ 15-30 ثانية)';
+  document.getElementById('beforeAfter').style.display = 'none';
+
+  fetch('/api/edit-image/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({drive_file_id: editFileId, instruction: instruction}),
+  })
+  .then(function(r) {
+    if (!r.ok) return r.json().then(function(d){ throw new Error(d.error || 'خطأ'); });
+    return r.blob();
+  })
+  .then(function(blob) {
+    var url = URL.createObjectURL(blob);
+    // عرض before/after
+    document.getElementById('beforeAfter').style.display = 'grid';
+    document.getElementById('afterImg').src = url;
+
+    if (action === 'download') {
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = editFileName.replace(/\.[^.]+$/, '') + '_edited.jpg';
+      a.click();
+      status.textContent = '✅ تم التحميل!';
+    } else {
+      status.textContent = '⏳ جاري الرفع على Drive...';
+      var form = new FormData();
+      form.append('file', blob, editFileName.replace(/\.[^.]+$/, '') + '_edited.jpg');
+      return fetch('/api/drive/upload/', {method:'POST', body:form})
+        .then(function(r2){ return r2.json(); })
+        .then(function(d) {
+          if (d.ok) {
+            status.innerHTML = '✅ تم الرفع! <a href="' + d.file.link + '" target="_blank" style="color:var(--accent);">فتح ↗</a>';
+            setTimeout(loadFiles, 1500);
+          } else {
+            status.textContent = '❌ ' + d.error;
+          }
+        });
+    }
+  })
+  .catch(function(e) { status.textContent = '❌ ' + e.message; });
 }
 
 loadFiles();

@@ -268,6 +268,53 @@ def api_drive_logout(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def api_edit_image(request):
+    """
+    POST /api/edit-image/
+    - multipart: file (image) + instruction
+    - JSON:      drive_file_id + instruction
+    Returns edited JPEG image.
+    """
+    tokens = request.session.get("drive_tokens")
+
+    if request.FILES.get("file"):
+        instruction  = request.POST.get("instruction", "").strip()
+        image_bytes  = request.FILES["file"].read()
+    else:
+        try:
+            body = json.loads(request.body or "{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"ok": False, "error": "JSON غير صالح"}, status=400)
+        instruction   = (body.get("instruction") or "").strip()
+        drive_file_id = (body.get("drive_file_id") or "").strip()
+        if not drive_file_id:
+            return JsonResponse({"ok": False, "error": "file أو drive_file_id مطلوب"}, status=400)
+        if not tokens:
+            return JsonResponse({"ok": False, "error": "غير مسجّل الدخول على Drive"}, status=401)
+        from .drive_service import download_file as drive_dl
+        try:
+            image_bytes = drive_dl(tokens["token"], drive_file_id)
+        except Exception as e:
+            return JsonResponse({"ok": False, "error": f"Drive download: {e}"}, status=500)
+
+    if not instruction:
+        return JsonResponse({"ok": False, "error": "التعليمات مطلوبة"}, status=400)
+
+    from .image_service import edit_image
+    try:
+        result_bytes = edit_image(image_bytes, instruction)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=500)
+
+    return HttpResponse(
+        result_bytes,
+        content_type="image/jpeg",
+        headers={"Content-Disposition": 'attachment; filename="edited.jpg"'},
+    )
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def api_resize_image(request):
     """
     POST /api/resize-image/
