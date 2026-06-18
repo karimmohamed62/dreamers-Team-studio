@@ -537,11 +537,15 @@ def api_create_full_content(request):
     if not topic:
         return JsonResponse({"ok": False, "error": "الموضوع مطلوب"}, status=400)
 
-    platforms_resize = (
-        request.POST.getlist("platforms[]") or
-        request.POST.getlist("platforms") or
-        ["instagram_reel", "instagram_feed", "tiktok"]
-    )
+    # Flutter sends comma-separated, web sends platforms[] array
+    _plat_raw = request.POST.get("platforms", "")
+    if _plat_raw:
+        platforms_resize = [p.strip() for p in _plat_raw.split(",") if p.strip()]
+    else:
+        platforms_resize = (
+            request.POST.getlist("platforms[]") or
+            ["instagram_reel", "instagram_feed", "tiktok"]
+        )
 
     gen_video_raw = (request.POST.get("generate_video") or "").lower()
     gen_video = gen_video_raw in ("true", "1", "yes")
