@@ -203,17 +203,25 @@ def drive_callback(request):
             "access_token":  access_token,
             "refresh_token": refresh_token,
         })
-        deep_link = f"dreamers://studio?{params}"
-        # Chrome on Android blocks HTTP 302 → custom scheme; JS redirect works
+        # intent:// URL — Chrome on Android opens the app directly (most reliable)
+        intent_url = (
+            f"intent://studio?{params}"
+            f"#Intent;scheme=dreamers;package=com.dreamers.dreamers_studio_app;"
+            f"S.browser_fallback_url=https%3A%2F%2Fdreamers-team-studio.onrender.com%2F;end"
+        )
+        custom_url = f"dreamers://studio?{params}"
         from django.http import HttpResponse
         html = f"""<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><title>جارٍ العودة للتطبيق...</title></head>
 <body>
-<script>window.location.replace("{deep_link}");</script>
-<p style="font-family:sans-serif;text-align:center;margin-top:40px">
+<script>
+  // intent:// is most reliable in Chrome on Android
+  window.location.replace("{intent_url}");
+</script>
+<p style="font-family:sans-serif;text-align:center;margin-top:40px;direction:rtl">
   جارٍ العودة للتطبيق...<br><br>
-  <a href="{deep_link}">اضغط هنا إذا لم تنتقل تلقائياً</a>
+  <a href="{intent_url}">افتح التطبيق</a>
 </p>
 </body>
 </html>"""
