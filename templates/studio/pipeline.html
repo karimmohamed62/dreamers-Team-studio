@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dreamers Studio · Pipeline</title>
+<style>
+:root{--deep:#060f1e;--primary:#0077b6;--accent:#00b4d8;--foam:#90e0ef;--gold:#f4c430;--card:#0a1626;--border:#1a3a52;--err:#ffb4b4;--err-bg:#3a1212;--green:#4caf50;}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--deep);color:#e8f4f8;font-family:system-ui,'Segoe UI',Tahoma,sans-serif;line-height:1.7;}
+.wrap{max-width:700px;margin:0 auto;padding:24px 16px;}
+.logo{font-size:32px;}
+h1{font-size:22px;font-weight:600;margin:8px 0 4px;}
+.sub{color:var(--foam);font-size:14px;margin:0 0 4px;}
+.nav{display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap;}
+.nav a{color:var(--foam);font-size:13px;text-decoration:none;opacity:.7;}
+.nav a:hover,.nav a.active{opacity:1;color:var(--accent);}
+.section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:16px;}
+.section-title{font-size:15px;font-weight:600;margin:0 0 14px;display:flex;align-items:center;gap:8px;}
+.step-num{background:var(--primary);color:#fff;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;}
+label{display:block;font-size:13px;color:var(--foam);margin:12px 0 5px;}
+label:first-child{margin-top:0;}
+input[type=text],select,textarea{width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:#060f1e;color:#e8f4f8;font-size:14px;font-family:inherit;}
+textarea{resize:vertical;min-height:80px;}
+.row{display:flex;gap:10px;}.row>div{flex:1;}
+.rng{display:flex;align-items:center;gap:12px;}
+input[type=range]{flex:1;accent-color:var(--accent);}
+.cb-row{display:flex;align-items:center;gap:10px;margin:8px 0;cursor:pointer;}
+.cb-row input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;}
+.cb-row span{font-size:14px;}
+.warn{background:rgba(244,196,48,.1);border:1px solid rgba(244,196,48,.3);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--gold);margin-top:8px;}
+.img-drop{width:100%;height:160px;border:2px dashed var(--border);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:border-color .2s;background:#060f1e;}
+.img-drop:hover{border-color:var(--accent);}
+.img-drop.has-img{border-style:solid;border-color:var(--accent);}
+.img-drop img{max-height:140px;max-width:100%;border-radius:6px;object-fit:contain;}
+.img-drop span{font-size:13px;color:#5a7a90;margin-top:6px;}
+.platforms-grid{display:flex;flex-wrap:wrap;gap:8px;}
+.plat-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;border:1px solid var(--border);font-size:13px;cursor:pointer;transition:.2s;user-select:none;}
+.plat-chip:hover{border-color:var(--accent);}
+.plat-chip.selected{background:rgba(0,180,216,.15);border-color:var(--accent);color:var(--accent);}
+.btn{width:100%;margin-top:16px;padding:14px;border:none;border-radius:10px;background:var(--primary);color:#fff;font-size:16px;font-weight:600;cursor:pointer;font-family:inherit;transition:.2s;}
+.btn:hover{background:var(--accent);}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.btn-run{background:linear-gradient(135deg,var(--primary),var(--accent));font-size:17px;}
+/* Timeline */
+#timeline{margin-top:24px;display:none;}
+.tl-item{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid rgba(26,58,82,.4);}
+.tl-item:last-child{border-bottom:none;}
+.tl-icon{font-size:18px;flex-shrink:0;margin-top:2px;}
+.tl-msg{font-size:14px;color:#e8f4f8;}
+.tl-msg.error{color:var(--err);}
+.tl-msg.done{color:#7ee8a2;}
+/* Result */
+#resultBox{margin-top:24px;}
+.res-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;}
+.res-card h2{margin:0 0 12px;font-size:16px;color:var(--foam);}
+.cap-box{background:#060f1e;border-radius:8px;padding:12px;font-size:13px;color:#b8d4e0;white-space:pre-wrap;margin:10px 0;}
+.file-list a{display:block;color:var(--accent);font-size:13px;padding:3px 0;text-decoration:none;}
+.file-list a:hover{text-decoration:underline;}
+.err-banner{background:var(--err-bg);border:1px solid #6e2020;border-radius:8px;padding:12px;color:var(--err);font-size:13px;margin-bottom:12px;}
+video{width:100%;border-radius:8px;margin-top:10px;}
+.preview-img{max-width:100%;border-radius:8px;margin-top:10px;max-height:250px;object-fit:contain;}
+.copy-btn{background:transparent;border:1px solid var(--border);color:var(--foam);border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer;float:left;}
+.copy-btn:hover{border-color:var(--accent);color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">🐬</div>
+  <h1>Dreamers Studio</h1>
+  <p class="sub">Pipeline المتكامل</p>
+  <div class="nav">
+    <a href="/">السكريبت</a>
+    <a href="/voices/">الأصوات</a>
+    <a href="/drive/">Drive ☁️</a>
+    <a href="/export/">🚀 Export</a>
+    <a href="/pipeline/" class="active">🎬 Pipeline</a>
+  </div>
+
+  <!-- ① الصورة -->
+  <div class="section">
+    <div class="section-title"><span class="step-num">1</span> اختيار الصورة</div>
+    <div class="img-drop" id="imgDrop" onclick="document.getElementById('imgInput').click()">
+      <span>📷 اضغط لاختيار صورة</span>
+    </div>
+    <input type="file" id="imgInput" accept="image/*" style="display:none" onchange="handleImg(this)">
+    <div id="imgName" style="font-size:12px;color:#5a7a90;margin-top:6px;"></div>
+  </div>
+
+  <!-- ② تعديل AI -->
+  <div class="section">
+    <div class="section-title"><span class="step-num">2</span> تعديل الصورة بـ AI (Nano Banana)</div>
+    <label class="cb-row">
+      <input type="checkbox" id="enableAiEdit">
+      <span>فعّل تعديل الصورة</span>
+    </label>
+    <div id="aiEditBox" style="display:none">
+      <label>تعليمات التعديل</label>
+      <textarea id="aiInstruction" placeholder="مثال: أضف نص Dreamers Team باللون الذهبي في الأسفل"></textarea>
+    </div>
+  </div>
+
+  <!-- ③ إعدادات السكريبت -->
+  <div class="section">
+    <div class="section-title"><span class="step-num">3</span> إعدادات السكريبت</div>
+    <label>موضوع المحتوى</label>
+    <input type="text" id="topic" placeholder="مثال: رحلة دولفين VIP في الغردقة">
+    <div class="row" style="margin-top:12px;">
+      <div>
+        <label>المنصة</label>
+        <select id="platform">
+          <option value="instagram_reel">Instagram Reel (9:16)</option>
+          <option value="instagram_feed">Instagram Feed (4:5)</option>
+          <option value="tiktok">TikTok (9:16)</option>
+          <option value="youtube_short">YouTube Short (9:16)</option>
+          <option value="youtube_long">YouTube (16:9)</option>
+          <option value="facebook_reel">Facebook Reel (9:16)</option>
+        </select>
+      </div>
+      <div>
+        <label>اللغة</label>
+        <select id="language">
+          <option value="العربية">عربي</option>
+          <option value="الألمانية">Deutsch</option>
+          <option value="الإنجليزية">English</option>
+          <option value="الإيطالية">Italiano</option>
+        </select>
+      </div>
+    </div>
+    <label>الأسلوب</label>
+    <select id="tone">
+      <option value="حماسي ومغامر">حماسي ومغامر</option>
+      <option value="احترافي">احترافي</option>
+      <option value="عائلي ودافئ">عائلي ودافئ</option>
+      <option value="عادي وبسيط">عادي وبسيط</option>
+      <option value="تعليمي">تعليمي</option>
+    </select>
+    <label>مدة الفيديو: <span id="dv">30</span> ثانية</label>
+    <div class="rng">
+      <input type="range" id="duration" min="15" max="90" step="5" value="30"
+             oninput="document.getElementById('dv').textContent=this.value">
+    </div>
+  </div>
+
+  <!-- ④ الصوت -->
+  <div class="section">
+    <div class="section-title"><span class="step-num">4</span> الصوت (اختياري)</div>
+    <select id="voiceId">
+      <option value="">بدون صوت</option>
+      {% for v in voices %}
+      <option value="{{ v.id }}">{{ v.name }}{% if v.category %} ({{ v.category }}){% endif %}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <!-- ⑤ الفيديو -->
+  <div class="section">
+    <div class="section-title"><span class="step-num">5</span> الفيديو بـ Veo 3.1 (اختياري)</div>
+    <label class="cb-row">
+      <input type="checkbox" id="enableVideo">
+      <span>ولّد فيديو بـ Veo 3.1</span>
+    </label>
+    <div id="videoWarnBox" style="display:none">
+      <div class="warn">⚠️ كل فيديو يكلف تقريباً $0.25-0.30 ويستغرق 1-3 دقايق</div>
+    </div>
+  </div>
+
+  <!-- ⑥ المنصات -->
+  <div class="section">
+    <div class="section-title"><span class="step-num">6</span> منصات الـ Resize</div>
+    <div class="platforms-grid" id="platformsGrid">
+      <div class="plat-chip selected" data-val="instagram_reel">Instagram Reel</div>
+      <div class="plat-chip selected" data-val="instagram_feed">Instagram Feed</div>
+      <div class="plat-chip selected" data-val="tiktok">TikTok</div>
+      <div class="plat-chip" data-val="facebook_reel">Facebook Reel</div>
+      <div class="plat-chip" data-val="facebook_feed">Facebook Feed</div>
+      <div class="plat-chip" data-val="youtube_short">YouTube Short</div>
+      <div class="plat-chip" data-val="youtube_long">YouTube Long</div>
+      <div class="plat-chip" data-val="twitter">Twitter/X</div>
+    </div>
+  </div>
+
+  <!-- زرار التشغيل -->
+  <button class="btn btn-run" id="btnRun" onclick="runPipeline()">🚀 ابدأ الـ Pipeline الكامل</button>
+
+  <!-- Timeline -->
+  <div id="timeline"></div>
+
+  <!-- النتيجة -->
+  <div id="resultBox"></div>
+</div>
+
+<script>
+{% csrf_token %}
+var csrfToken = '{{ csrf_token }}';
+var imgFile = null;
+
+// ── صورة ──────────────────────────────────────────────────────────────────────
+function handleImg(input) {
+  if (!input.files[0]) return;
+  imgFile = input.files[0];
+  var drop = document.getElementById('imgDrop');
+  var url = URL.createObjectURL(imgFile);
+  drop.innerHTML = '<img src="' + url + '">';
+  drop.classList.add('has-img');
+  document.getElementById('imgName').textContent = '📎 ' + imgFile.name;
+}
+
+// ── AI Edit toggle ─────────────────────────────────────────────────────────────
+document.getElementById('enableAiEdit').addEventListener('change', function() {
+  document.getElementById('aiEditBox').style.display = this.checked ? 'block' : 'none';
+});
+
+// ── Video toggle ───────────────────────────────────────────────────────────────
+document.getElementById('enableVideo').addEventListener('change', function() {
+  document.getElementById('videoWarnBox').style.display = this.checked ? 'block' : 'none';
+});
+
+// ── Platforms chips ────────────────────────────────────────────────────────────
+document.querySelectorAll('.plat-chip').forEach(function(chip) {
+  chip.addEventListener('click', function() {
+    this.classList.toggle('selected');
+  });
+});
+
+// ── Timeline helpers ───────────────────────────────────────────────────────────
+function addStep(icon, msg, cls) {
+  var tl = document.getElementById('timeline');
+  tl.style.display = 'block';
+  var div = document.createElement('div');
+  div.className = 'tl-item';
+  div.innerHTML = '<div class="tl-icon">' + icon + '</div><div class="tl-msg' + (cls?' '+cls:'') + '">' + msg + '</div>';
+  tl.appendChild(div);
+  div.scrollIntoView({behavior:'smooth',block:'nearest'});
+  return div;
+}
+
+// ── تشغيل الـ Pipeline ─────────────────────────────────────────────────────────
+function runPipeline() {
+  var topic = document.getElementById('topic').value.trim();
+  if (!imgFile) { alert('اختار صورة الأول'); return; }
+  if (!topic)   { alert('اكتب الموضوع الأول'); return; }
+
+  var btn = document.getElementById('btnRun');
+  btn.disabled = true;
+  btn.textContent = '⏳ جاري التنفيذ...';
+  document.getElementById('timeline').innerHTML = '';
+  document.getElementById('timeline').style.display = 'none';
+  document.getElementById('resultBox').innerHTML = '';
+
+  var form = new FormData();
+  form.append('image', imgFile, imgFile.name);
+  form.append('topic', topic);
+  form.append('platform', document.getElementById('platform').value);
+  form.append('language', document.getElementById('language').value);
+  form.append('tone', document.getElementById('tone').value);
+  form.append('duration', document.getElementById('duration').value);
+
+  var voiceId = document.getElementById('voiceId').value;
+  if (voiceId) form.append('voice_id', voiceId);
+
+  var aiEnabled = document.getElementById('enableAiEdit').checked;
+  var aiInstr   = document.getElementById('aiInstruction').value.trim();
+  if (aiEnabled && aiInstr) form.append('ai_image_instruction', aiInstr);
+
+  if (document.getElementById('enableVideo').checked) form.append('generate_video', 'true');
+
+  document.querySelectorAll('.plat-chip.selected').forEach(function(chip) {
+    form.append('platforms[]', chip.dataset.val);
+  });
+
+  // Steps مؤقتة تعرض أثناء الانتظار
+  var steps = [];
+  if (aiEnabled && aiInstr) steps.push(['⏳', 'بيعدّل الصورة بـ AI...']);
+  steps.push(['⏳', 'بيولّد السكريبت...']);
+  if (voiceId) steps.push(['⏳', 'بيولّد الصوت...']);
+  if (document.getElementById('enableVideo').checked) steps.push(['⏳', 'بيولّد الفيديو (1-3 دقايق)...']);
+  steps.push(['⏳', 'بيرفع على Drive...']);
+
+  steps.forEach(function(s) { addStep(s[0], s[1]); });
+
+  fetch('/api/create-full-content/', {
+    method: 'POST',
+    headers: {'X-CSRFToken': csrfToken},
+    body: form,
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) { renderResult(d); })
+  .catch(function(e) { renderResult({ok:false, error: e.message}); })
+  .finally(function() {
+    btn.disabled = false;
+    btn.textContent = '🚀 ابدأ الـ Pipeline الكامل';
+  });
+}
+
+// ── رسم النتيجة ────────────────────────────────────────────────────────────────
+function renderResult(d) {
+  var tl = document.getElementById('timeline');
+  tl.innerHTML = '';
+
+  // استبدل الـ steps المؤقتة بالـ log الحقيقي
+  if (d.steps_log && d.steps_log.length) {
+    d.steps_log.forEach(function(step) {
+      var icon = step.status === 'done' ? '✅' : step.status === 'error' ? '❌' : '⏳';
+      var cls  = step.status === 'done' ? 'done' : step.status === 'error' ? 'error' : '';
+      addStep(icon, step.msg, cls);
+    });
+  } else if (!d.ok) {
+    addStep('❌', d.error || 'خطأ غير معروف', 'error');
+    return;
+  }
+
+  if (!d.ok && !d.steps_log) return;
+
+  var box = document.getElementById('resultBox');
+  var html = '<div class="res-card">';
+
+  // أخطاء جزئية
+  if (d.errors && d.errors.length) {
+    html += '<div class="err-banner">';
+    d.errors.forEach(function(e) { html += '<div>' + e + '</div>'; });
+    html += '</div>';
+  }
+
+  // معاينة الصورة المعدّلة
+  if (d.edited_image_preview) {
+    html += '<h2>🖼️ الصورة بعد التعديل</h2>';
+    html += '<img class="preview-img" src="data:image/jpeg;base64,' + d.edited_image_preview + '">';
+  }
+
+  // السكريبت
+  if (d.script) {
+    html += '<h2 style="margin-top:16px;">📝 الكابشن</h2>';
+    html += '<button class="copy-btn" onclick="copyCaption()">📋 نسخ</button>';
+    html += '<div class="cap-box" id="captionBox">';
+    html += (d.script.caption || '') + '\n\n';
+    if (d.script.hashtags) html += d.script.hashtags.map(function(t){return '#'+t;}).join(' ');
+    html += '</div>';
+  }
+
+  // فيديو
+  if (d.video_link) {
+    html += '<h2 style="margin-top:16px;">🎬 الفيديو</h2>';
+    html += '<a href="' + d.video_link + '" target="_blank" style="color:var(--accent);font-size:13px;">↗ فتح الفيديو على Drive</a>';
+  }
+
+  // Drive
+  if (d.folder_link) {
+    html += '<h2 style="margin-top:16px;">☁️ Drive</h2>';
+    html += '<a href="' + d.folder_link + '" target="_blank" style="color:var(--accent);font-size:14px;">📁 فتح المجلد على Drive ↗</a>';
+  }
+
+  // الملفات
+  if (d.files && d.files.length) {
+    html += '<div class="file-list" style="margin-top:12px;">';
+    d.files.forEach(function(f) {
+      if (f.link) {
+        html += '<a href="' + f.link + '" target="_blank">📄 ' + f.name + '</a>';
+      } else {
+        html += '<div style="font-size:12px;color:#5a7a90;">📄 ' + f.name + (f.error?' — ❌ '+f.error:'') + '</div>';
+      }
+    });
+    html += '</div>';
+  }
+
+  html += '</div>';
+  box.innerHTML = html;
+  box.scrollIntoView({behavior:'smooth'});
+}
+
+function copyCaption() {
+  var el = document.getElementById('captionBox');
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent).then(function() {
+    var btn = document.querySelector('.copy-btn');
+    btn.textContent = '✅ تم النسخ';
+    setTimeout(function(){ btn.textContent = '📋 نسخ'; }, 2000);
+  });
+}
+</script>
+</body>
+</html>

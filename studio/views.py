@@ -491,6 +491,82 @@ def api_export(request):
     })
 
 
+# ─── Full Pipeline ────────────────────────────────────────────────────────────
+
+def pipeline_page(request):
+    """صفحة الـ Pipeline المتكاملة."""
+    from .elevenlabs_service import list_voices
+    voices = []
+    try:
+        voices = list_voices()
+    except Exception:
+        pass
+    return render(request, "studio/pipeline.html", {"voices": voices})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_create_full_content(request):
+    """
+    POST /api/create-full-content/
+    multipart/form-data:
+      image (file) | drive_file_id
+      topic, platform, language, tone, duration
+      voice_id (optional)
+      ai_image_instruction (optional)
+      generate_video (true/false)
+      platforms[] (list for resize)
+    """
+    tokens = request.session.get("drive_tokens")
+
+    # ── صورة ─────────────────────────────────────────────────────────────────
+    image_bytes = None
+    if request.FILES.get("image"):
+        image_bytes = request.FILES["image"].read()
+    elif request.POST.get("drive_file_id") and tokens:
+        from .drive_service import download_file as drive_dl
+        try:
+            image_bytes = drive_dl(tokens["token"], request.POST["drive_file_id"])
+        except Exception as e:
+            return JsonResponse({"ok": False, "error": f"Drive download فشل: {e}"}, status=500)
+
+    if not image_bytes:
+        return JsonResponse({"ok": False, "error": "صورة مطلوبة"}, status=400)
+
+    topic = (request.POST.get("topic") or "").strip()
+    if not topic:
+        return JsonResponse({"ok": False, "error": "الموضوع مطلوب"}, status=400)
+
+    platforms_resize = (
+        request.POST.getlist("platforms[]") or
+        request.POST.getlist("platforms") or
+        ["instagram_reel", "instagram_feed", "tiktok"]
+    )
+
+    gen_video_raw = (request.POST.get("generate_video") or "").lower()
+    gen_video = gen_video_raw in ("true", "1", "yes")
+
+    from .pipeline_service import create_full_content
+    try:
+        result = create_full_content(
+            image_bytes=image_bytes,
+            topic=topic,
+            platform=request.POST.get("platform", "instagram_reel"),
+            language=request.POST.get("language", "العربية"),
+            tone=request.POST.get("tone", "حماسي ومغامر"),
+            duration=int(request.POST.get("duration", 30)),
+            voice_id=request.POST.get("voice_id") or None,
+            ai_image_instruction=request.POST.get("ai_image_instruction") or None,
+            generate_video=gen_video,
+            access_token=tokens["token"] if tokens else None,
+            folder_name=request.POST.get("folder_name") or None,
+            platforms_resize=platforms_resize,
+        )
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=500)
+
+
 # ─── Video (Veo) ──────────────────────────────────────────────────────────────
 
 @csrf_exempt

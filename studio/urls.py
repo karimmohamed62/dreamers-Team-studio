@@ -3,6 +3,7 @@ from . import views
 
 urlpatterns = [
     path("", views.home, name="home"),
+    path("pipeline/", views.pipeline_page, name="pipeline"),
     path("voices/", views.voice_settings_page, name="voices"),
     path("drive/", views.drive_page, name="drive"),
     path("export/", views.export_page, name="export"),
@@ -21,6 +22,8 @@ urlpatterns = [
     path("api/edit-image/",                views.api_edit_image,      name="api_edit_image"),
     # Resize API
     path("api/resize-image/",              views.api_resize_image,    name="api_resize_image"),
+    # Pipeline API
+    path("api/create-full-content/", views.api_create_full_content, name="api_create_full_content"),
     # Video API (Veo)
     path("api/generate-video/",             views.api_generate_video,             name="api_generate_video"),
     path("api/generate-video-from-script/", views.api_generate_video_from_script, name="api_generate_video_from_script"),

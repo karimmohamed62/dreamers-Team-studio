@@ -13,19 +13,17 @@ def get_client():
     return _client
 
 
-def generate_video(prompt, image_bytes=None, aspect_ratio="9:16", duration_seconds=8):
+def generate_video(prompt, image_bytes=None, aspect_ratio="9:16"):
     """
-    يولّد فيديو من نص (وصورة اختياري) باستخدام Veo.
+    يولّد فيديو من نص (وصورة اختياري) باستخدام Veo 3.1.
     يرجع: video bytes (MP4)
     """
     client = get_client()
 
-    config = types.GenerateVideosConfig(
-        aspect_ratio=aspect_ratio,
-    )
+    config = types.GenerateVideosConfig(aspect_ratio=aspect_ratio)
 
     kwargs = {
-        "model": "veo-3.0-generate-preview",
+        "model": "veo-3.1-generate-preview",
         "prompt": prompt,
         "config": config,
     }
@@ -38,9 +36,8 @@ def generate_video(prompt, image_bytes=None, aspect_ratio="9:16", duration_secon
 
     operation = client.models.generate_videos(**kwargs)
 
-    max_wait = 300
     waited = 0
-    while not operation.done and waited < max_wait:
+    while not operation.done and waited < 300:
         time.sleep(10)
         waited += 10
         operation = client.operations.get(operation)
@@ -49,14 +46,13 @@ def generate_video(prompt, image_bytes=None, aspect_ratio="9:16", duration_secon
         raise TimeoutError("الفيديو لسه بيتولد - جرب تاني بعد شوية")
 
     video = operation.response.generated_videos[0].video
-    video_bytes = client.files.download(file=video)
+    raw = client.files.download(file=video)
 
-    if isinstance(video_bytes, (bytes, bytearray)):
-        return bytes(video_bytes)
+    if isinstance(raw, (bytes, bytearray)):
+        return bytes(raw)
 
-    # بعض إصدارات SDK بترجع iterator
     chunks = []
-    for chunk in video_bytes:
+    for chunk in raw:
         chunks.append(chunk if isinstance(chunk, (bytes, bytearray)) else chunk.data)
     return b"".join(chunks)
 
@@ -74,9 +70,7 @@ def generate_video_from_script(script_scenes, platform="instagram_reel"):
     }
     aspect_ratio = aspect_map.get(platform, "9:16")
 
-    visuals = " then ".join(
-        s.get("visual", "") for s in script_scenes[:3]
-    )
+    visuals = " then ".join(s.get("visual", "") for s in script_scenes[:3])
     prompt = (
         f"Cinematic travel video for Red Sea Egypt tourism. "
         f"{visuals}. "
