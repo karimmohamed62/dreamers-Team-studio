@@ -491,6 +491,87 @@ def api_export(request):
     })
 
 
+# ─── Video (Veo) ──────────────────────────────────────────────────────────────
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_generate_video(request):
+    """
+    POST /api/generate-video/
+    JSON: {prompt, aspect_ratio, drive_file_id (اختياري)}
+    Returns: MP4 video bytes
+    """
+    try:
+        body = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"ok": False, "error": "JSON غير صالح"}, status=400)
+
+    prompt = (body.get("prompt") or "").strip()
+    if not prompt:
+        return JsonResponse({"ok": False, "error": "البرومت مطلوب"}, status=400)
+
+    aspect_ratio  = body.get("aspect_ratio", "9:16")
+    drive_file_id = (body.get("drive_file_id") or "").strip()
+
+    image_bytes = None
+    if drive_file_id:
+        tokens = request.session.get("drive_tokens")
+        if tokens:
+            from .drive_service import download_file as drive_dl
+            try:
+                image_bytes = drive_dl(tokens["token"], drive_file_id)
+            except Exception:
+                pass
+
+    from .video_service import generate_video
+    try:
+        video_bytes = generate_video(
+            prompt=prompt,
+            image_bytes=image_bytes,
+            aspect_ratio=aspect_ratio,
+        )
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=500)
+
+    return HttpResponse(
+        video_bytes,
+        content_type="video/mp4",
+        headers={"Content-Disposition": 'attachment; filename="generated_video.mp4"'},
+    )
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_generate_video_from_script(request):
+    """
+    POST /api/generate-video-from-script/
+    JSON: {scenes: [...], platform: "instagram_reel"}
+    Returns: MP4 video bytes
+    """
+    try:
+        body = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"ok": False, "error": "JSON غير صالح"}, status=400)
+
+    scenes   = body.get("scenes", [])
+    platform = body.get("platform", "instagram_reel")
+
+    if not scenes:
+        return JsonResponse({"ok": False, "error": "المشاهد مطلوبة"}, status=400)
+
+    from .video_service import generate_video_from_script
+    try:
+        video_bytes = generate_video_from_script(scenes, platform)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=500)
+
+    return HttpResponse(
+        video_bytes,
+        content_type="video/mp4",
+        headers={"Content-Disposition": 'attachment; filename="script_video.mp4"'},
+    )
+
+
 def voice_settings_page(request):
     """صفحة التحكم في إعدادات الأصوات"""
     voices = []
