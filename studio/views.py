@@ -178,23 +178,34 @@ def drive_callback(request):
     """Receive OAuth code, exchange for tokens, save in session."""
     from django.shortcuts import redirect
     from .drive_service import exchange_code
+    import urllib.parse
     code  = request.GET.get("code")
     error = request.GET.get("error")
     if error or not code:
         print(f"[Drive OAuth] error={error} params={dict(request.GET)}")
+        if request.session.get("oauth_source") == "mobile":
+            return redirect("dreamers://studio?error=auth_failed")
         return redirect("/drive/?error=" + (error or "no_code"))
     try:
         tokens = exchange_code(code)
+        access_token  = tokens.get("token", "")
+        refresh_token = tokens.get("refresh_token", "")
+        # احفظ في الـ session للويب
         request.session["drive_tokens"] = tokens
-        request.session.save()
-        session_key = request.session.session_key
-        print(f"[Drive OAuth] tokens received, session_key={session_key}")
+        request.session.modified = True
+        print(f"[Drive OAuth] tokens received, access={access_token[:20]}...")
     except Exception as e:
         print(f"[Drive OAuth] exchange failed: {e}")
+        if request.session.get("oauth_source") == "mobile":
+            return redirect(f"dreamers://studio?error={str(e)[:80]}")
         return redirect(f"/drive/?error={e}")
-    # للتطبيق Flutter: redirect لـ deep link مع session key
+    # للتطبيق Flutter: redirect بالـ token مباشرةً
     if request.session.get("oauth_source") == "mobile":
-        return redirect(f"dreamers://studio/drive?sk={session_key}")
+        params = urllib.parse.urlencode({
+            "access_token":  access_token,
+            "refresh_token": refresh_token,
+        })
+        return redirect(f"dreamers://studio?{params}")
     return redirect("/drive/")
 
 
@@ -210,12 +221,22 @@ def drive_page(request):
 
 # ─── Drive API endpoints ──────────────────────────────────────────────────────
 
+def _get_drive_token(request):
+    """Helper: get access token from X-Google-Token header or session."""
+    return (
+        request.headers.get("X-Google-Token") or
+        request.POST.get("access_token") or
+        request.GET.get("access_token") or
+        (request.session.get("drive_tokens") or {}).get("token")
+    )
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_drive_upload(request):
     """POST /api/drive/upload/ — multipart file upload to Google Drive."""
-    tokens = request.session.get("drive_tokens")
-    if not tokens:
+    access_token = _get_drive_token(request)
+    if not access_token:
         return JsonResponse({"ok": False, "error": "غير مسجّل الدخول"}, status=401)
     from .drive_service import upload_file as drive_upload
     f         = request.FILES.get("file")
@@ -224,7 +245,7 @@ def api_drive_upload(request):
         return JsonResponse({"ok": False, "error": "لم يتم إرسال ملف"}, status=400)
     try:
         result = drive_upload(
-            access_token=tokens["token"],
+            access_token=access_token,
             file_bytes=f.read(),
             filename=f.name,
             mime_type=f.content_type,
@@ -237,14 +258,14 @@ def api_drive_upload(request):
 
 @require_http_methods(["GET"])
 def api_drive_files(request):
-    """GET /api/drive/files/?folder_id=<id> — list media files."""
-    tokens = request.session.get("drive_tokens")
-    if not tokens:
+    """GET /api/drive/files/ — list media files."""
+    access_token = _get_drive_token(request)
+    if not access_token:
         return JsonResponse({"ok": False, "error": "غير مسجّل الدخول"}, status=401)
     from .drive_service import list_media_files
     folder_id = request.GET.get("folder_id") or None
     try:
-        files = list_media_files(tokens["token"], folder_id=folder_id)
+        files = list_media_files(access_token, folder_id=folder_id)
         return JsonResponse({"ok": True, "files": files})
     except Exception as e:
         return JsonResponse({"ok": False, "error": str(e)}, status=500)
@@ -253,12 +274,12 @@ def api_drive_files(request):
 @require_http_methods(["GET"])
 def api_drive_folders(request):
     """GET /api/drive/folders/ — list Drive folders."""
-    tokens = request.session.get("drive_tokens")
-    if not tokens:
+    access_token = _get_drive_token(request)
+    if not access_token:
         return JsonResponse({"ok": False, "error": "غير مسجّل الدخول"}, status=401)
     from .drive_service import list_folders
     try:
-        folders = list_folders(tokens["token"])
+        folders = list_folders(access_token)
         return JsonResponse({"ok": True, "folders": folders})
     except Exception as e:
         return JsonResponse({"ok": False, "error": str(e)}, status=500)
@@ -274,8 +295,8 @@ def api_drive_logout(request):
 
 def api_drive_status(request):
     """GET /api/drive/status/ — check if Drive is connected."""
-    tokens = request.session.get("drive_tokens")
-    return JsonResponse({"logged_in": bool(tokens)})
+    access_token = _get_drive_token(request)
+    return JsonResponse({"logged_in": bool(access_token)})
 
 
 @csrf_exempt
