@@ -194,7 +194,7 @@ def drive_callback(request):
         return redirect(f"/drive/?error={e}")
     # للتطبيق Flutter: redirect لـ deep link مع session key
     if request.session.get("oauth_source") == "mobile":
-        return redirect(f"dreamersstudio://auth?sk={session_key}")
+        return redirect(f"dreamers://studio/drive?sk={session_key}")
     return redirect("/drive/")
 
 
@@ -270,6 +270,12 @@ def api_drive_logout(request):
     """POST /api/drive/logout/ — clear Drive session."""
     request.session.pop("drive_tokens", None)
     return JsonResponse({"ok": True})
+
+
+def api_drive_status(request):
+    """GET /api/drive/status/ — check if Drive is connected."""
+    tokens = request.session.get("drive_tokens")
+    return JsonResponse({"logged_in": bool(tokens)})
 
 
 @csrf_exempt
