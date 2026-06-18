@@ -169,6 +169,7 @@ def drive_login(request):
     from .drive_service import get_auth_url
     auth_url, state = get_auth_url()
     request.session["oauth_state"] = state
+    request.session["oauth_source"] = request.GET.get("source", "web")
     from django.shortcuts import redirect
     return redirect(auth_url)
 
@@ -185,10 +186,15 @@ def drive_callback(request):
     try:
         tokens = exchange_code(code)
         request.session["drive_tokens"] = tokens
-        print(f"[Drive OAuth] tokens received, token={tokens['token'][:20]}...")
+        request.session.save()
+        session_key = request.session.session_key
+        print(f"[Drive OAuth] tokens received, session_key={session_key}")
     except Exception as e:
         print(f"[Drive OAuth] exchange failed: {e}")
         return redirect(f"/drive/?error={e}")
+    # للتطبيق Flutter: redirect لـ deep link مع session key
+    if request.session.get("oauth_source") == "mobile":
+        return redirect(f"dreamersstudio://auth?sk={session_key}")
     return redirect("/drive/")
 
 
