@@ -21,8 +21,8 @@ TOKEN_URI = "https://oauth2.googleapis.com/token"
 MEDIA_MIME_PREFIXES = ("image/", "video/", "audio/")
 
 
-def get_auth_url():
-    """Build OAuth URL manually — no PKCE, no code_challenge."""
+def get_auth_url(source="web"):
+    """Build OAuth URL — passes source (web/mobile) via state param."""
     params = {
         "client_id":     settings.GOOGLE_CLIENT_ID,
         "redirect_uri":  REDIRECT_URI,
@@ -30,10 +30,10 @@ def get_auth_url():
         "scope":         SCOPES,
         "access_type":   "offline",
         "prompt":        "consent",
+        "state":         source,
     }
     print(f"DEBUG REDIRECT_URI: {REDIRECT_URI}", flush=True)
-    url = AUTH_URI + "?" + urlencode(params)
-    return url, ""          # state not used but keeps the same signature
+    return AUTH_URI + "?" + urlencode(params)
 
 
 def exchange_code(code):

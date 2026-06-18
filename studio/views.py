@@ -167,40 +167,38 @@ def home(request):
 def drive_login(request):
     """Redirect user to Google OAuth consent screen."""
     from .drive_service import get_auth_url
-    auth_url, state = get_auth_url()
-    request.session["oauth_state"] = state
-    request.session["oauth_source"] = request.GET.get("source", "web")
     from django.shortcuts import redirect
+    source = request.GET.get("source", "web")
+    auth_url = get_auth_url(source=source)
     return redirect(auth_url)
 
 
 def drive_callback(request):
-    """Receive OAuth code, exchange for tokens, save in session."""
+    """Receive OAuth code, exchange for tokens."""
     from django.shortcuts import redirect
     from .drive_service import exchange_code
     import urllib.parse
-    code  = request.GET.get("code")
-    error = request.GET.get("error")
+    code   = request.GET.get("code")
+    error  = request.GET.get("error")
+    source = request.GET.get("state", "web")   # mobile أو web — جاي من الـ state param
     if error or not code:
         print(f"[Drive OAuth] error={error} params={dict(request.GET)}")
-        if request.session.get("oauth_source") == "mobile":
+        if source == "mobile":
             return redirect("dreamers://studio?error=auth_failed")
         return redirect("/drive/?error=" + (error or "no_code"))
     try:
         tokens = exchange_code(code)
         access_token  = tokens.get("token", "")
         refresh_token = tokens.get("refresh_token", "")
-        # احفظ في الـ session للويب
         request.session["drive_tokens"] = tokens
         request.session.modified = True
         print(f"[Drive OAuth] tokens received, access={access_token[:20]}...")
     except Exception as e:
         print(f"[Drive OAuth] exchange failed: {e}")
-        if request.session.get("oauth_source") == "mobile":
+        if source == "mobile":
             return redirect(f"dreamers://studio?error={str(e)[:80]}")
         return redirect(f"/drive/?error={e}")
-    # للتطبيق Flutter: redirect بالـ token مباشرةً
-    if request.session.get("oauth_source") == "mobile":
+    if source == "mobile":
         params = urllib.parse.urlencode({
             "access_token":  access_token,
             "refresh_token": refresh_token,
