@@ -168,23 +168,34 @@ def drive_login(request):
     """Redirect user to Google OAuth consent screen."""
     from .drive_service import get_auth_url
     from django.shortcuts import redirect
-    source = request.GET.get("source", "web")
-    auth_url = get_auth_url(source=source)
+    source     = request.GET.get("source", "web")
+    session_id = request.GET.get("session_id", "")
+    # Encode both source and session_id in state: "mobile:SESSION_ID"
+    state = f"{source}:{session_id}" if session_id else source
+    auth_url = get_auth_url(source=state)
     return redirect(auth_url)
 
 
 def drive_callback(request):
     """Receive OAuth code, exchange for tokens."""
     from django.shortcuts import redirect
+    from django.core.cache import cache
+    from django.http import HttpResponse
     from .drive_service import exchange_code
-    import urllib.parse
-    code   = request.GET.get("code")
-    error  = request.GET.get("error")
-    source = request.GET.get("state", "web")   # mobile أو web — جاي من الـ state param
+    code  = request.GET.get("code")
+    error = request.GET.get("error")
+    state = request.GET.get("state", "web")
+    # Parse state: "mobile:SESSION_ID" or just "mobile" or "web"
+    if ":" in state:
+        source, session_id = state.split(":", 1)
+    else:
+        source, session_id = state, ""
     if error or not code:
-        print(f"[Drive OAuth] error={error} params={dict(request.GET)}")
+        print(f"[Drive OAuth] error={error}")
         if source == "mobile":
-            return redirect("dreamers://studio?error=auth_failed")
+            if session_id:
+                cache.set(f"oauth_{session_id}", {"error": error or "no_code"}, 300)
+            return HttpResponse("فشل تسجيل الدخول، ارجع للتطبيق وحاول مرة أخرى")
         return redirect("/drive/?error=" + (error or "no_code"))
     try:
         tokens = exchange_code(code)
@@ -196,16 +207,40 @@ def drive_callback(request):
     except Exception as e:
         print(f"[Drive OAuth] exchange failed: {e}")
         if source == "mobile":
-            return redirect(f"dreamers://studio?error={str(e)[:80]}")
+            if session_id:
+                cache.set(f"oauth_{session_id}", {"error": str(e)[:80]}, 300)
+            return HttpResponse(f"فشل تسجيل الدخول: {e}")
         return redirect(f"/drive/?error={e}")
     if source == "mobile":
-        params = urllib.parse.urlencode({
-            "access_token":  access_token,
-            "refresh_token": refresh_token,
-        })
-        # flutter_web_auth_2 intercepts URL changes in Custom Tab — plain 302 works
-        return redirect(f"dreamers://studio?{params}")
+        if session_id:
+            # Store tokens in cache — Flutter app polls for them
+            cache.set(f"oauth_{session_id}", {
+                "access_token":  access_token,
+                "refresh_token": refresh_token,
+            }, 300)  # 5-minute TTL
+        return HttpResponse(
+            "<html><body style='font-family:sans-serif;text-align:center;margin-top:60px;direction:rtl'>"
+            "<h2>✅ تم تسجيل الدخول بنجاح!</h2>"
+            "<p>يمكنك العودة للتطبيق الآن</p>"
+            "</body></html>"
+        )
     return redirect("/drive/")
+
+
+def api_auth_poll(request):
+    """GET /api/auth/poll/?session_id=XXX — Flutter polls for OAuth tokens."""
+    from django.core.cache import cache
+    session_id = request.GET.get("session_id", "")
+    if not session_id:
+        return JsonResponse({"ready": False})
+    data = cache.get(f"oauth_{session_id}")
+    if data and "access_token" in data:
+        cache.delete(f"oauth_{session_id}")
+        return JsonResponse({"ready": True, **data})
+    if data and "error" in data:
+        cache.delete(f"oauth_{session_id}")
+        return JsonResponse({"ready": False, "error": data["error"]})
+    return JsonResponse({"ready": False})
 
 
 def drive_page(request):

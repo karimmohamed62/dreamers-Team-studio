@@ -34,4 +34,5 @@ urlpatterns = [
     path("api/drive/folders/",                 views.api_drive_folders,   name="api_drive_folders"),
     path("api/drive/logout/",                  views.api_drive_logout,    name="api_drive_logout"),
     path("api/drive/status/",                  views.api_drive_status,    name="api_drive_status"),
+    path("api/auth/poll/",                     views.api_auth_poll,        name="api_auth_poll"),
 ]
