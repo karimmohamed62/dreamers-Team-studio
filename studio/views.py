@@ -179,13 +179,12 @@ def drive_login(request):
 def drive_callback(request):
     """Receive OAuth code, exchange for tokens."""
     from django.shortcuts import redirect
-    from django.core.cache import cache
     from django.http import HttpResponse
     from .drive_service import exchange_code
+    from .models import OAuthToken
     code  = request.GET.get("code")
     error = request.GET.get("error")
     state = request.GET.get("state", "web")
-    # Parse state: "mobile:SESSION_ID" or just "mobile" or "web"
     if ":" in state:
         source, session_id = state.split(":", 1)
     else:
@@ -193,8 +192,6 @@ def drive_callback(request):
     if error or not code:
         print(f"[Drive OAuth] error={error}")
         if source == "mobile":
-            if session_id:
-                cache.set(f"oauth_{session_id}", {"error": error or "no_code"}, 300)
             return HttpResponse("فشل تسجيل الدخول، ارجع للتطبيق وحاول مرة أخرى")
         return redirect("/drive/?error=" + (error or "no_code"))
     try:
@@ -207,17 +204,14 @@ def drive_callback(request):
     except Exception as e:
         print(f"[Drive OAuth] exchange failed: {e}")
         if source == "mobile":
-            if session_id:
-                cache.set(f"oauth_{session_id}", {"error": str(e)[:80]}, 300)
             return HttpResponse(f"فشل تسجيل الدخول: {e}")
         return redirect(f"/drive/?error={e}")
     if source == "mobile":
         if session_id:
-            # Store tokens in cache — Flutter app polls for them
-            cache.set(f"oauth_{session_id}", {
-                "access_token":  access_token,
-                "refresh_token": refresh_token,
-            }, 300)  # 5-minute TTL
+            OAuthToken.objects.update_or_create(
+                session_id=session_id,
+                defaults={"access_token": access_token, "refresh_token": refresh_token},
+            )
         return HttpResponse(
             "<html><body style='font-family:sans-serif;text-align:center;margin-top:60px;direction:rtl'>"
             "<h2>✅ تم تسجيل الدخول بنجاح!</h2>"
@@ -229,18 +223,17 @@ def drive_callback(request):
 
 def api_auth_poll(request):
     """GET /api/auth/poll/?session_id=XXX — Flutter polls for OAuth tokens."""
-    from django.core.cache import cache
+    from .models import OAuthToken
     session_id = request.GET.get("session_id", "")
     if not session_id:
         return JsonResponse({"ready": False})
-    data = cache.get(f"oauth_{session_id}")
-    if data and "access_token" in data:
-        cache.delete(f"oauth_{session_id}")
-        return JsonResponse({"ready": True, **data})
-    if data and "error" in data:
-        cache.delete(f"oauth_{session_id}")
-        return JsonResponse({"ready": False, "error": data["error"]})
-    return JsonResponse({"ready": False})
+    try:
+        token = OAuthToken.objects.get(session_id=session_id)
+        data = {"ready": True, "access_token": token.access_token, "refresh_token": token.refresh_token}
+        token.delete()
+        return JsonResponse(data)
+    except OAuthToken.DoesNotExist:
+        return JsonResponse({"ready": False})
 
 
 def drive_page(request):
