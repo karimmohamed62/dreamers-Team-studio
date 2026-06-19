@@ -11,6 +11,7 @@ urlpatterns = [
     # OAuth
     path("auth/google/", views.drive_login, name="drive_login"),
     path("auth/google/callback/", views.drive_callback, name="drive_callback"),
+    path("auth/google/mobile-done/", views.drive_mobile_done, name="drive_mobile_done"),
     # Script API
     path("api/generate-script/",   views.api_generate_script,    name="api_generate_script"),
     path("api/generate-full/",     views.api_generate_full,       name="api_generate_full"),

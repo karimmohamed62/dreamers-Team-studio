@@ -212,12 +212,8 @@ def drive_callback(request):
                 session_id=session_id,
                 defaults={"access_token": access_token, "refresh_token": refresh_token},
             )
-        return HttpResponse(
-            "<html><body style='font-family:sans-serif;text-align:center;margin-top:60px;direction:rtl'>"
-            "<h2>✅ تم تسجيل الدخول بنجاح!</h2>"
-            "<p>يمكنك العودة للتطبيق الآن</p>"
-            "</body></html>"
-        )
+        from urllib.parse import quote
+        return redirect(f"/auth/google/mobile-done/?s={quote(session_id)}")
     return redirect("/drive/")
 
 
@@ -234,6 +230,16 @@ def api_auth_poll(request):
         return JsonResponse(data)
     except OAuthToken.DoesNotExist:
         return JsonResponse({"ready": False})
+
+
+def drive_mobile_done(request):
+    """Flutter WebView detects navigation to this URL and closes."""
+    return HttpResponse(
+        "<html><body style='font-family:sans-serif;text-align:center;margin-top:80px;direction:rtl'>"
+        "<h2>✅ تم تسجيل الدخول!</h2>"
+        "<p>جاري العودة للتطبيق...</p>"
+        "</body></html>"
+    )
 
 
 def drive_page(request):
