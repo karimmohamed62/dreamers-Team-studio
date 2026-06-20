@@ -232,6 +232,11 @@ def api_auth_poll(request):
         return JsonResponse({"ready": False})
 
 
+def deploy_check(request):
+    """Quick check to confirm current deployment version."""
+    return HttpResponse("v20260620-ok")
+
+
 def drive_mobile_done(request):
     """Flutter WebView detects navigation to this URL and closes."""
     return HttpResponse(
