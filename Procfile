@@ -1,1 +1,1 @@
-web: python manage.py migrate --run-syncdb --fake-initial && gunicorn config.wsgi:application --timeout 360 --workers 1
+web: python manage.py migrate --fake-initial --no-input; gunicorn config.wsgi:application --timeout 360 --workers 1
