@@ -1,51 +1,14 @@
 """
 Pipeline service - يجمع كل الخطوات في pipeline واحد متكامل.
 كل خطوة في try/except منفصلة - فشل خطوة ما يوقفش الباقي.
+الملفات بترجع كـ base64 مباشرة (بدون Drive).
 """
 import base64
-import datetime
 import io
 
 from .gemini_service import generate_script
 from .elevenlabs_service import generate_voiceover
 from .resize_service import resize_image, PLATFORM_SIZES
-from .drive_service import upload_file, _service
-
-
-def _get_or_create_folder(svc, folder_name):
-    q = (
-        f"name='{folder_name}' "
-        "and mimeType='application/vnd.google-apps.folder' "
-        "and trashed=false"
-    )
-    res = svc.files().list(q=q, fields="files(id,name)", pageSize=1).execute()
-    files = res.get("files", [])
-    if files:
-        return files[0]["id"]
-    meta = {"name": folder_name, "mimeType": "application/vnd.google-apps.folder"}
-    f = svc.files().create(body=meta, fields="id").execute()
-    return f["id"]
-
-
-def _build_caption_txt(script):
-    lines = [
-        "=" * 50,
-        "DREAMERS TEAM — CAPTION & HASHTAGS",
-        "=" * 50, "",
-        "HOOK:", script.get("hook", ""), "",
-        "CAPTION:", script.get("caption", ""), "",
-        "CTA:", script.get("cta", ""), "",
-        "HASHTAGS:",
-        " ".join(f"#{t}" for t in script.get("hashtags", [])), "",
-        "=" * 50, "SCENES:", "=" * 50,
-    ]
-    for i, sc in enumerate(script.get("scenes", []), 1):
-        lines.append(f"\n[{i}] {sc.get('time','')}")
-        lines.append(f"  Visual:    {sc.get('visual','')}")
-        lines.append(f"  Voiceover: {sc.get('voiceover','')}")
-        if sc.get("text_overlay"):
-            lines.append(f"  Overlay:   {sc.get('text_overlay','')}")
-    return "\n".join(lines).encode("utf-8")
 
 
 def _small_preview(image_bytes, max_size=400):
@@ -71,8 +34,6 @@ def create_full_content(
     voice_id=None,
     ai_image_instruction=None,
     generate_video=False,
-    access_token=None,
-    folder_name=None,
     platforms_resize=None,
 ):
     """
@@ -81,29 +42,24 @@ def create_full_content(
     2. توليد السكريبت بـ Gemini
     3. توليد الصوت بـ ElevenLabs (اختياري)
     4. توليد الفيديو بـ Veo (اختياري)
-    5. Resize الصورة لكل المنصات المطلوبة
-    6. رفع كل حاجة على Drive
-
-    يرجع dict بالنتائج والـ steps_log.
+    5. Resize الصورة لكل المنصات
+    يرجع كل الملفات كـ base64 - بدون Drive.
     """
     steps_log = []
     result = {
         "ok": True,
         "steps_log": steps_log,
         "script": None,
-        "folder_link": None,
-        "files": [],
         "edited_image_preview": None,
-        "video_link": None,
+        "edited_image_b64": None,
+        "audio_b64": None,
+        "video_generated": False,
+        "files": [],
         "errors": [],
     }
 
     working_image = image_bytes
     edited_image  = None
-
-    if not folder_name:
-        slug = topic[:20].replace(" ", "_")
-        folder_name = f"Dreamers_{datetime.date.today().strftime('%Y%m%d')}_{slug}"
 
     if platforms_resize is None:
         platforms_resize = ["instagram_reel", "instagram_feed", "tiktok"]
@@ -116,6 +72,7 @@ def create_full_content(
             edited_image = edit_image(image_bytes, ai_image_instruction.strip())
             working_image = edited_image
             result["edited_image_preview"] = _small_preview(edited_image)
+            result["edited_image_b64"] = base64.b64encode(edited_image).decode("utf-8")
             steps_log[-1] = {"status": "done", "msg": "✅ تم تعديل الصورة بـ AI"}
         except Exception as e:
             err = f"❌ تعديل الصورة فشل: {e}"
@@ -142,11 +99,11 @@ def create_full_content(
         return result
 
     # ── 3. توليد الصوت ─────────────────────────────────────────────────────────
-    audio_bytes = None
     if voice_id and voice_id.strip():
         steps_log.append({"status": "running", "msg": "⏳ بيولّد الصوت..."})
         try:
             audio_bytes = generate_voiceover(script["scenes"], voice_id.strip())
+            result["audio_b64"] = base64.b64encode(audio_bytes).decode("utf-8")
             steps_log[-1] = {"status": "done", "msg": "✅ تم توليد الصوت"}
         except Exception as e:
             err = f"❌ توليد الصوت فشل: {e}"
@@ -154,7 +111,6 @@ def create_full_content(
             result["errors"].append(err)
 
     # ── 4. توليد الفيديو بـ Veo ────────────────────────────────────────────────
-    video_bytes = None
     if generate_video:
         steps_log.append({"status": "running", "msg": "⏳ بيولّد الفيديو (1-3 دقايق)..."})
         try:
@@ -165,7 +121,6 @@ def create_full_content(
                 "youtube_long": "16:9", "twitter": "16:9",
             }
             aspect_ratio = aspect_map.get(platform, "9:16")
-
             visuals = " then ".join(
                 s.get("visual", "") for s in script.get("scenes", [])[:3]
             )
@@ -174,89 +129,40 @@ def create_full_content(
                 f"{visuals}. "
                 f"High quality, vibrant colors, professional cinematography."
             )
-            video_bytes = veo_generate(
+            veo_generate(
                 prompt=prompt,
                 image_bytes=working_image,
                 aspect_ratio=aspect_ratio,
             )
+            result["video_generated"] = True
             steps_log[-1] = {"status": "done", "msg": "✅ تم توليد الفيديو"}
         except Exception as e:
             err = f"❌ توليد الفيديو فشل: {e}"
             steps_log[-1] = {"status": "error", "msg": err}
             result["errors"].append(err)
 
-    # ── 5 + 6. Resize + رفع على Drive ─────────────────────────────────────────
-    if not access_token:
-        steps_log.append({"status": "error", "msg": "⚠️ مش متصل بـ Drive - تم حفظ الملفات محلياً"})
-        return result
-
-    steps_log.append({"status": "running", "msg": "⏳ بيرفع على Drive..."})
-    try:
-        svc = _service(access_token)
-        folder_id = _get_or_create_folder(svc, folder_name)
-        folder_link = f"https://drive.google.com/drive/folders/{folder_id}"
-        result["folder_link"] = folder_link
-        uploaded = []
-
-        # الصورة الأصلية
+    # ── 5. Resize الصور للمنصات ────────────────────────────────────────────────
+    steps_log.append({"status": "running", "msg": "⏳ جاري تحجيم الصور للمنصات..."})
+    resized_files = []
+    for plt in platforms_resize:
+        if plt not in PLATFORM_SIZES:
+            continue
+        w, h = PLATFORM_SIZES[plt]
+        fname = f"{plt}_{w}x{h}.jpg"
         try:
-            r = upload_file(access_token, image_bytes, "original_image.jpg", "image/jpeg", folder_id)
-            uploaded.append({"name": "original_image.jpg", "link": r["link"]})
+            resized = resize_image(working_image, plt)
+            resized_files.append({
+                "name": fname,
+                "data": base64.b64encode(resized).decode("utf-8"),
+                "platform": plt,
+            })
         except Exception as e:
-            uploaded.append({"name": "original_image.jpg", "link": "", "error": str(e)})
+            resized_files.append({"name": fname, "error": str(e)})
 
-        # الصورة المعدّلة
-        if edited_image:
-            try:
-                r = upload_file(access_token, edited_image, "edited_image.jpg", "image/jpeg", folder_id)
-                uploaded.append({"name": "edited_image.jpg", "link": r["link"]})
-            except Exception as e:
-                uploaded.append({"name": "edited_image.jpg", "link": "", "error": str(e)})
-
-        # Resize لكل منصة
-        for plt in platforms_resize:
-            if plt not in PLATFORM_SIZES:
-                continue
-            w, h = PLATFORM_SIZES[plt]
-            fname = f"{plt}_{w}x{h}.jpg"
-            try:
-                resized = resize_image(working_image, plt)
-                r = upload_file(access_token, resized, fname, "image/jpeg", folder_id)
-                uploaded.append({"name": fname, "link": r["link"], "platform": plt})
-            except Exception as e:
-                uploaded.append({"name": fname, "link": "", "error": str(e)})
-
-        # الفيديو
-        if video_bytes:
-            try:
-                r = upload_file(access_token, video_bytes, "video.mp4", "video/mp4", folder_id)
-                uploaded.append({"name": "video.mp4", "link": r["link"]})
-                result["video_link"] = r["link"]
-            except Exception as e:
-                uploaded.append({"name": "video.mp4", "link": "", "error": str(e)})
-
-        # الصوت
-        if audio_bytes:
-            try:
-                r = upload_file(access_token, audio_bytes, "voiceover.mp3", "audio/mpeg", folder_id)
-                uploaded.append({"name": "voiceover.mp3", "link": r["link"]})
-            except Exception as e:
-                uploaded.append({"name": "voiceover.mp3", "link": "", "error": str(e)})
-
-        # الكابشن
-        try:
-            caption_txt = _build_caption_txt(script)
-            r = upload_file(access_token, caption_txt, "caption.txt", "text/plain", folder_id)
-            uploaded.append({"name": "caption.txt", "link": r["link"]})
-        except Exception as e:
-            uploaded.append({"name": "caption.txt", "link": "", "error": str(e)})
-
-        result["files"] = uploaded
-        steps_log[-1] = {"status": "done", "msg": f"✅ تم الرفع على Drive ({len(uploaded)} ملفات)"}
-
-    except Exception as e:
-        err = f"❌ Drive فشل: {e}"
-        steps_log[-1] = {"status": "error", "msg": err}
-        result["errors"].append(err)
+    result["files"] = resized_files
+    steps_log[-1] = {
+        "status": "done",
+        "msg": f"✅ تم تحجيم الصور ({len(resized_files)} نسخ)",
+    }
 
     return result

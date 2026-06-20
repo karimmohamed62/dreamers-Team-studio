@@ -581,25 +581,18 @@ def api_create_full_content(request):
     """
     POST /api/create-full-content/
     multipart/form-data:
-      image (file) | drive_file_id
+      image (file)
       topic, platform, language, tone, duration
       voice_id (optional)
       ai_image_instruction (optional)
       generate_video (true/false)
-      platforms[] (list for resize)
+      platforms (comma-separated list for resize)
+    يرجع الملفات كـ base64 مباشرة - بدون Drive.
     """
-    tokens = request.session.get("drive_tokens")
-
     # ── صورة ─────────────────────────────────────────────────────────────────
     image_bytes = None
     if request.FILES.get("image"):
         image_bytes = request.FILES["image"].read()
-    elif request.POST.get("drive_file_id") and tokens:
-        from .drive_service import download_file as drive_dl
-        try:
-            image_bytes = drive_dl(tokens["token"], request.POST["drive_file_id"])
-        except Exception as e:
-            return JsonResponse({"ok": False, "error": f"Drive download فشل: {e}"}, status=500)
 
     if not image_bytes:
         return JsonResponse({"ok": False, "error": "صورة مطلوبة"}, status=400)
@@ -633,8 +626,6 @@ def api_create_full_content(request):
             voice_id=request.POST.get("voice_id") or None,
             ai_image_instruction=request.POST.get("ai_image_instruction") or None,
             generate_video=gen_video,
-            access_token=tokens["token"] if tokens else None,
-            folder_name=request.POST.get("folder_name") or None,
             platforms_resize=platforms_resize,
         )
         return JsonResponse(result)
