@@ -5,6 +5,8 @@ import json
 import base64
 import datetime
 import os
+import threading
+import uuid as _uuid_mod
 from pathlib import Path
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -17,9 +19,10 @@ from .elevenlabs_service import (
     save_voice_settings, DEFAULT_SETTINGS
 )
 
-# ── Video rate limiting ────────────────────────────────────────────────────────
+# ── Video rate limiting + async jobs ──────────────────────────────────────────
 
 _COUNTER_FILE = Path("/tmp/veo_daily_counter.json")
+_JOBS_DIR     = Path("/tmp/veo_jobs")
 
 
 def _get_today_video_count():
@@ -344,22 +347,36 @@ def api_create_full_content(request):
         return JsonResponse({"ok": False, "error": str(e)}, status=500)
 
 
-# ─── Video (Veo) — with rate limiting ────────────────────────────────────────
+# ─── Video (Veo) — async job pattern (avoids Render 502 timeout) ─────────────
+
+def _video_worker(job_id: str, prompt: str, image_bytes, aspect_ratio: str):
+    """Runs in background thread; writes result to /tmp/veo_jobs/<job_id>.json."""
+    job_file = _JOBS_DIR / f"{job_id}.json"
+    try:
+        from .video_service import generate_video
+        video_bytes = generate_video(
+            prompt=prompt, image_bytes=image_bytes, aspect_ratio=aspect_ratio
+        )
+        job_file.write_text(json.dumps({
+            "status": "done",
+            "video_b64": base64.b64encode(video_bytes).decode("utf-8"),
+        }))
+    except Exception as e:
+        job_file.write_text(json.dumps({"status": "error", "error": str(e)}))
+
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_generate_video(request):
     """
     POST /api/generate-video/
-    multipart: image (file, optional) + prompt + aspect_ratio
-    Returns JSON: {ok, video_b64}
-    Rate limited by ENABLE_VIDEO_GENERATION + MAX_VIDEO_GENERATIONS_PER_DAY.
+    Returns immediately with {ok, job_id}.
+    Flutter polls /api/video-status/<job_id>/ until done.
     """
     allowed, err_msg = _check_video_allowed()
     if not allowed:
         return JsonResponse({"ok": False, "error": err_msg}, status=429)
 
-    # Support both multipart and JSON
     if request.FILES.get("image"):
         image_bytes  = request.FILES["image"].read()
         prompt       = (request.POST.get("prompt") or "").strip()
@@ -377,26 +394,31 @@ def api_generate_video(request):
         return JsonResponse({"ok": False, "error": "البرومت مطلوب"}, status=400)
 
     count = _increment_video_count()
-    print(
-        f"[VEO COST WARNING] Video generation #{count} today "
-        f"- estimated cost: $0.25-0.30"
-    )
+    print(f"[VEO COST WARNING] Video generation #{count} today - estimated cost: $0.25-0.30")
 
-    from .video_service import generate_video
+    job_id = str(_uuid_mod.uuid4())
+    _JOBS_DIR.mkdir(exist_ok=True)
+    (_JOBS_DIR / f"{job_id}.json").write_text(json.dumps({"status": "pending"}))
+
+    threading.Thread(
+        target=_video_worker,
+        args=(job_id, prompt, image_bytes, aspect_ratio),
+        daemon=True,
+    ).start()
+
+    return JsonResponse({"ok": True, "job_id": job_id, "count_today": count})
+
+
+@require_http_methods(["GET"])
+def api_video_status(request, job_id):
+    """GET /api/video-status/<job_id>/ → {status: pending|done|error, video_b64?, error?}"""
+    job_file = _JOBS_DIR / f"{job_id}.json"
+    if not job_file.exists():
+        return JsonResponse({"status": "not_found"}, status=404)
     try:
-        video_bytes = generate_video(
-            prompt=prompt,
-            image_bytes=image_bytes,
-            aspect_ratio=aspect_ratio,
-        )
-    except Exception as e:
-        return JsonResponse({"ok": False, "error": str(e)}, status=500)
-
-    return JsonResponse({
-        "ok": True,
-        "video_b64": base64.b64encode(video_bytes).decode("utf-8"),
-        "count_today": count,
-    })
+        return JsonResponse(json.loads(job_file.read_text()))
+    except Exception:
+        return JsonResponse({"status": "error", "error": "تعذّر قراءة حالة المهمة"})
 
 
 @csrf_exempt

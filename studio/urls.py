@@ -19,8 +19,9 @@ urlpatterns = [
     path("api/resize-image/",      views.api_resize_image,        name="api_resize_image"),
     # Pipeline API
     path("api/create-full-content/", views.api_create_full_content, name="api_create_full_content"),
-    # Video API (Veo) — rate limited
+    # Video API (Veo) — async job pattern
     path("api/generate-video/",             views.api_generate_video,             name="api_generate_video"),
+    path("api/video-status/<str:job_id>/",  views.api_video_status,               name="api_video_status"),
     path("api/generate-video-from-script/", views.api_generate_video_from_script, name="api_generate_video_from_script"),
     # Export
     path("api/export/", views.api_export, name="api_export"),
