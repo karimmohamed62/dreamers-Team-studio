@@ -1,17 +1,60 @@
 """
-الـ Views - Dreamers Studio
+الـ Views - Dreamers Studio (Drive removed)
 """
 import json
 import base64
+import datetime
+import os
+from pathlib import Path
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.shortcuts import render
+from django.conf import settings
 from .gemini_service import generate_script, PLATFORM_SPECS
 from .elevenlabs_service import (
     list_voices, generate_voiceover, text_to_speech,
     save_voice_settings, DEFAULT_SETTINGS
 )
+
+# ── Video rate limiting ────────────────────────────────────────────────────────
+
+_COUNTER_FILE = Path("/tmp/veo_daily_counter.json")
+
+
+def _get_today_video_count():
+    today = str(datetime.date.today())
+    try:
+        data = json.loads(_COUNTER_FILE.read_text())
+        if data.get("date") == today:
+            return int(data.get("count", 0))
+    except Exception:
+        pass
+    return 0
+
+
+def _increment_video_count():
+    today = str(datetime.date.today())
+    count = _get_today_video_count() + 1
+    try:
+        _COUNTER_FILE.write_text(json.dumps({"date": today, "count": count}))
+    except Exception:
+        pass
+    return count
+
+
+def _check_video_allowed():
+    """Returns (allowed: bool, error_msg: str | None)"""
+    if not settings.ENABLE_VIDEO_GENERATION:
+        return False, "توليد الفيديو معطّل مؤقتاً. تواصل مع المطور."
+    count = _get_today_video_count()
+    limit = settings.MAX_VIDEO_GENERATIONS_PER_DAY
+    if count >= limit:
+        return False, (
+            f"تم الوصول للحد اليومي المسموح من توليد الفيديو ({limit}). "
+            "جرّب بكرة أو زوّد الحد من الكود."
+        )
+    return True, None
 
 
 # ─── Script ───────────────────────────────────────────────────────────────────
@@ -65,20 +108,18 @@ def api_generate_voice(request):
 
     scenes   = body.get("scenes", [])
     voice_id = (body.get("voice_id") or "").strip()
-    vsettings = body.get("settings", {})
-
     if not scenes:
         return JsonResponse({"ok": False, "error": "المشاهد مطلوبة"}, status=400)
     if not voice_id:
         return JsonResponse({"ok": False, "error": "voice_id مطلوب"}, status=400)
 
     try:
-        audio_bytes = generate_voiceover(scenes, voice_id, voice_settings=vsettings)
-        return HttpResponse(
-            audio_bytes,
-            content_type="audio/mpeg",
-            headers={"Content-Disposition": 'attachment; filename="voiceover.mp3"'},
+        audio_bytes = generate_voiceover(
+            scenes, voice_id,
+            voice_settings=body.get("settings", {}),
         )
+        return HttpResponse(audio_bytes, content_type="audio/mpeg",
+                            headers={"Content-Disposition": 'attachment; filename="voiceover.mp3"'})
     except Exception as e:
         return JsonResponse({"ok": False, "error": str(e)}, status=500)
 
@@ -86,11 +127,7 @@ def api_generate_voice(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_generate_full(request):
-    """
-    POST /api/generate-full/
-    {topic, platform, language, tone, duration, voice_id, settings?}
-    يرجّع السكريبت + الصوت كـ base64 في خطوة واحدة
-    """
+    """POST /api/generate-full/ — script + voice in one call."""
     try:
         body = json.loads(request.body or "{}")
     except json.JSONDecodeError:
@@ -129,11 +166,7 @@ def api_generate_full(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_save_voice_settings(request):
-    """
-    POST /api/voice-settings/
-    {voice_id, stability, similarity_boost, style, speed}
-    يحفظ الإعدادات على ElevenLabs
-    """
+    """POST /api/voice-settings/"""
     try:
         body = json.loads(request.body or "{}")
     except json.JSONDecodeError:
@@ -162,218 +195,32 @@ def home(request):
     return render(request, "studio/home.html", {"platforms": PLATFORM_SPECS})
 
 
-# ─── Google Drive OAuth ───────────────────────────────────────────────────────
-
-def drive_login(request):
-    """Redirect user to Google OAuth consent screen."""
-    from .drive_service import get_auth_url
-    from django.shortcuts import redirect
-    source     = request.GET.get("source", "web")
-    session_id = request.GET.get("session_id", "")
-    # Encode both source and session_id in state: "mobile:SESSION_ID"
-    state = f"{source}:{session_id}" if session_id else source
-    auth_url = get_auth_url(source=state)
-    return redirect(auth_url)
-
-
-def drive_callback(request):
-    """Receive OAuth code, exchange for tokens."""
-    from django.shortcuts import redirect
-    from django.http import HttpResponse
-    from .drive_service import exchange_code
-    from .models import OAuthToken
-    code  = request.GET.get("code")
-    error = request.GET.get("error")
-    state = request.GET.get("state", "web")
-    if ":" in state:
-        source, session_id = state.split(":", 1)
-    else:
-        source, session_id = state, ""
-    if error or not code:
-        print(f"[Drive OAuth] error={error}")
-        if source == "mobile":
-            return HttpResponse("فشل تسجيل الدخول، ارجع للتطبيق وحاول مرة أخرى")
-        return redirect("/drive/?error=" + (error or "no_code"))
-    try:
-        tokens = exchange_code(code)
-        access_token  = tokens.get("token", "")
-        refresh_token = tokens.get("refresh_token", "")
-        request.session["drive_tokens"] = tokens
-        request.session.modified = True
-        print(f"[Drive OAuth] tokens received, access={access_token[:20]}...")
-    except Exception as e:
-        print(f"[Drive OAuth] exchange failed: {e}")
-        if source == "mobile":
-            return HttpResponse(f"فشل تسجيل الدخول: {e}")
-        return redirect(f"/drive/?error={e}")
-    if source == "mobile":
-        if session_id:
-            OAuthToken.objects.update_or_create(
-                session_id=session_id,
-                defaults={"access_token": access_token, "refresh_token": refresh_token},
-            )
-        from urllib.parse import quote
-        return redirect(f"/auth/google/mobile-done/?s={quote(session_id)}")
-    return redirect("/drive/")
-
-
-def api_auth_poll(request):
-    """GET /api/auth/poll/?session_id=XXX — Flutter polls for OAuth tokens."""
-    from .models import OAuthToken
-    session_id = request.GET.get("session_id", "")
-    if not session_id:
-        return JsonResponse({"ready": False})
-    try:
-        token = OAuthToken.objects.get(session_id=session_id)
-        data = {"ready": True, "access_token": token.access_token, "refresh_token": token.refresh_token}
-        token.delete()
-        return JsonResponse(data)
-    except OAuthToken.DoesNotExist:
-        return JsonResponse({"ready": False})
-
-
 def deploy_check(request):
     """Quick check to confirm current deployment version."""
-    return HttpResponse("v20260620-ok")
+    return HttpResponse("v20260621-no-drive")
 
 
-def drive_mobile_done(request):
-    """Flutter WebView detects navigation to this URL and closes."""
-    return HttpResponse(
-        "<html><body style='font-family:sans-serif;text-align:center;margin-top:80px;direction:rtl'>"
-        "<h2>✅ تم تسجيل الدخول!</h2>"
-        "<p>جاري العودة للتطبيق...</p>"
-        "</body></html>"
-    )
-
-
-def drive_page(request):
-    """Main Drive browser page."""
-    tokens = request.session.get("drive_tokens")
-    error  = request.GET.get("error")
-    return render(request, "studio/drive.html", {
-        "authenticated": bool(tokens),
-        "error": error,
-    })
-
-
-# ─── Drive API endpoints ──────────────────────────────────────────────────────
-
-def _get_drive_token(request):
-    """Helper: get access token from X-Google-Token header or session."""
-    return (
-        request.headers.get("X-Google-Token") or
-        request.POST.get("access_token") or
-        request.GET.get("access_token") or
-        (request.session.get("drive_tokens") or {}).get("token")
-    )
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def api_drive_upload(request):
-    """POST /api/drive/upload/ — multipart file upload to Google Drive."""
-    access_token = _get_drive_token(request)
-    if not access_token:
-        return JsonResponse({"ok": False, "error": "غير مسجّل الدخول"}, status=401)
-    from .drive_service import upload_file as drive_upload
-    f         = request.FILES.get("file")
-    folder_id = request.POST.get("folder_id") or None
-    if not f:
-        return JsonResponse({"ok": False, "error": "لم يتم إرسال ملف"}, status=400)
-    try:
-        result = drive_upload(
-            access_token=access_token,
-            file_bytes=f.read(),
-            filename=f.name,
-            mime_type=f.content_type,
-            folder_id=folder_id,
-        )
-        return JsonResponse({"ok": True, "file": result})
-    except Exception as e:
-        return JsonResponse({"ok": False, "error": str(e)}, status=500)
-
-
-@require_http_methods(["GET"])
-def api_drive_files(request):
-    """GET /api/drive/files/ — list media files."""
-    access_token = _get_drive_token(request)
-    if not access_token:
-        return JsonResponse({"ok": False, "error": "غير مسجّل الدخول"}, status=401)
-    from .drive_service import list_media_files
-    folder_id = request.GET.get("folder_id") or None
-    try:
-        files = list_media_files(access_token, folder_id=folder_id)
-        return JsonResponse({"ok": True, "files": files})
-    except Exception as e:
-        return JsonResponse({"ok": False, "error": str(e)}, status=500)
-
-
-@require_http_methods(["GET"])
-def api_drive_folders(request):
-    """GET /api/drive/folders/ — list Drive folders."""
-    access_token = _get_drive_token(request)
-    if not access_token:
-        return JsonResponse({"ok": False, "error": "غير مسجّل الدخول"}, status=401)
-    from .drive_service import list_folders
-    try:
-        folders = list_folders(access_token)
-        return JsonResponse({"ok": True, "folders": folders})
-    except Exception as e:
-        return JsonResponse({"ok": False, "error": str(e)}, status=500)
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def api_drive_logout(request):
-    """POST /api/drive/logout/ — clear Drive session."""
-    request.session.pop("drive_tokens", None)
-    return JsonResponse({"ok": True})
-
-
-def api_drive_status(request):
-    """GET /api/drive/status/ — check if Drive is connected."""
-    access_token = _get_drive_token(request)
-    return JsonResponse({"logged_in": bool(access_token)})
-
+# ─── Image Edit & Resize ──────────────────────────────────────────────────────
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_edit_image(request):
     """
     POST /api/edit-image/
-    - multipart: file (image) + instruction
-    - JSON:      drive_file_id + instruction
+    multipart: image (file) + instruction
     Returns edited JPEG image.
     """
-    tokens = request.session.get("drive_tokens")
+    if not request.FILES.get("file") and not request.FILES.get("image"):
+        return JsonResponse({"ok": False, "error": "image file مطلوب"}, status=400)
 
-    if request.FILES.get("file"):
-        instruction  = request.POST.get("instruction", "").strip()
-        image_bytes  = request.FILES["file"].read()
-    else:
-        try:
-            body = json.loads(request.body or "{}")
-        except json.JSONDecodeError:
-            return JsonResponse({"ok": False, "error": "JSON غير صالح"}, status=400)
-        instruction   = (body.get("instruction") or "").strip()
-        drive_file_id = (body.get("drive_file_id") or "").strip()
-        if not drive_file_id:
-            return JsonResponse({"ok": False, "error": "file أو drive_file_id مطلوب"}, status=400)
-        if not tokens:
-            return JsonResponse({"ok": False, "error": "غير مسجّل الدخول على Drive"}, status=401)
-        from .drive_service import download_file as drive_dl
-        try:
-            image_bytes = drive_dl(tokens["token"], drive_file_id)
-        except Exception as e:
-            return JsonResponse({"ok": False, "error": f"Drive download: {e}"}, status=500)
-
+    f = request.FILES.get("file") or request.FILES.get("image")
+    instruction = (request.POST.get("instruction") or "").strip()
     if not instruction:
         return JsonResponse({"ok": False, "error": "التعليمات مطلوبة"}, status=400)
 
     from .image_service import edit_image
     try:
-        result_bytes = edit_image(image_bytes, instruction)
+        result_bytes = edit_image(f.read(), instruction)
     except Exception as e:
         return JsonResponse({"ok": False, "error": str(e)}, status=500)
 
@@ -389,38 +236,18 @@ def api_edit_image(request):
 def api_resize_image(request):
     """
     POST /api/resize-image/
-    - multipart: file (image) + platform
-    - JSON:      drive_file_id + platform
+    multipart: image (file) + platform
     Returns JPEG image.
     """
-    tokens = request.session.get("drive_tokens")
+    if not request.FILES.get("file") and not request.FILES.get("image"):
+        return JsonResponse({"ok": False, "error": "image file مطلوب"}, status=400)
 
-    # multipart upload
-    if request.FILES.get("file"):
-        platform = request.POST.get("platform", "instagram_feed")
-        image_bytes = request.FILES["file"].read()
-        source = "upload"
-    else:
-        try:
-            body = json.loads(request.body or "{}")
-        except json.JSONDecodeError:
-            return JsonResponse({"ok": False, "error": "JSON غير صالح"}, status=400)
-        platform      = body.get("platform", "instagram_feed")
-        drive_file_id = (body.get("drive_file_id") or "").strip()
-        if not drive_file_id:
-            return JsonResponse({"ok": False, "error": "file أو drive_file_id مطلوب"}, status=400)
-        if not tokens:
-            return JsonResponse({"ok": False, "error": "غير مسجّل الدخول على Drive"}, status=401)
-        from .drive_service import download_file as drive_dl
-        try:
-            image_bytes = drive_dl(tokens["token"], drive_file_id)
-        except Exception as e:
-            return JsonResponse({"ok": False, "error": f"Drive download: {e}"}, status=500)
-        source = "drive"
+    f        = request.FILES.get("file") or request.FILES.get("image")
+    platform = request.POST.get("platform", "instagram_feed")
 
     from .resize_service import resize_image, get_platform_info
     try:
-        result_bytes = resize_image(image_bytes, platform)
+        result_bytes = resize_image(f.read(), platform)
     except Exception as e:
         return JsonResponse({"ok": False, "error": str(e)}, status=400)
 
@@ -430,32 +257,16 @@ def api_resize_image(request):
         content_type="image/jpeg",
         headers={
             "Content-Disposition": f'attachment; filename="resized_{platform}.jpg"',
-            "X-Platform":  platform,
-            "X-Width":     str(info["width"]),
-            "X-Height":    str(info["height"]),
+            "X-Platform": platform,
+            "X-Width":    str(info["width"]),
+            "X-Height":   str(info["height"]),
         },
     )
 
 
-@require_http_methods(["GET"])
-def api_drive_download(request, file_id):
-    """GET /api/drive/download/<file_id>/ — stream file from Drive."""
-    tokens = request.session.get("drive_tokens")
-    if not tokens:
-        return JsonResponse({"ok": False, "error": "غير مسجّل الدخول"}, status=401)
-    from .drive_service import download_file as drive_download
-    try:
-        data = drive_download(tokens["token"], file_id)
-        return HttpResponse(data, content_type="application/octet-stream",
-                            headers={"Content-Disposition": f'attachment; filename="{file_id}"'})
-    except Exception as e:
-        return JsonResponse({"ok": False, "error": str(e)}, status=500)
-
-
-# ─── Export ───────────────────────────────────────────────────────────────────
+# ─── Export (بدون Drive — يرجع خطأ واضح) ────────────────────────────────────
 
 def export_page(request):
-    """صفحة Export المتكاملة."""
     return render(request, "studio/export.html", {"platforms": PLATFORM_SPECS})
 
 
@@ -463,113 +274,22 @@ def export_page(request):
 @require_http_methods(["POST"])
 def api_export(request):
     """
-    POST /api/export/
-    multipart/form-data:
-      image (file, optional)  |  drive_file_id (optional)
-      topic, platform, language, tone, duration
-      voice_id (optional)
-      platforms[] — list of target platforms
-      ai_instruction (optional)
-    Returns JSON with folder_link, files, script, caption.
+    Export endpoint — Drive removed.
+    TODO: rewrite to save locally when needed.
     """
-    tokens = request.session.get("drive_tokens")
-
-    # ── 0. Early Drive check ──────────────────────────────────────────────────
-    if not tokens:
-        return JsonResponse({"ok": False, "error": "سجّل دخولك على Drive أولاً من صفحة /drive/"}, status=401)
-
-    # ── 1. Get image ──────────────────────────────────────────────────────────
-    image_bytes = None
-    if request.FILES.get("image"):
-        image_bytes = request.FILES["image"].read()
-    elif request.POST.get("drive_file_id") and tokens:
-        from .drive_service import download_file as drive_dl
-        try:
-            image_bytes = drive_dl(tokens["token"], request.POST["drive_file_id"])
-        except Exception as e:
-            return JsonResponse({"ok": False, "step": "image", "error": str(e)}, status=500)
-
-    if not image_bytes:
-        return JsonResponse({"ok": False, "error": "صورة مطلوبة (upload أو drive_file_id)"}, status=400)
-
-    # ── 2. AI edit (optional) ─────────────────────────────────────────────────
-    ai_instruction = (request.POST.get("ai_instruction") or "").strip()
-    ai_warning     = None
-    if ai_instruction:
-        from .image_service import edit_image
-        try:
-            image_bytes = edit_image(image_bytes, ai_instruction)
-        except Exception as e:
-            ai_warning = f"Nano Banana فشل ({e}) — متابع بالصورة الأصلية"
-
-    # ── 3. Generate script ────────────────────────────────────────────────────
-    topic    = (request.POST.get("topic") or "").strip()
-    if not topic:
-        return JsonResponse({"ok": False, "error": "الموضوع مطلوب"}, status=400)
-    try:
-        script = generate_script(
-            topic=topic,
-            platform=request.POST.get("platform", "instagram"),
-            language=request.POST.get("language", "ألمانية"),
-            tone=request.POST.get("tone", "حماسي ومغامر"),
-            duration=int(request.POST.get("duration", 30)),
-        )
-    except Exception as e:
-        return JsonResponse({"ok": False, "step": "script", "error": str(e)}, status=500)
-
-    # ── 4. Generate voice (optional) ──────────────────────────────────────────
-    audio_bytes   = None
-    voice_warning = None
-    voice_id      = (request.POST.get("voice_id") or "").strip()
-    if voice_id:
-        try:
-            audio_bytes = generate_voiceover(script["scenes"], voice_id)
-        except Exception as e:
-            voice_warning = f"ElevenLabs فشل ({e}) — بدون صوت"
-
-    # ── 5. Export to Drive ────────────────────────────────────────────────────
-    import datetime
-    slug = topic[:20].replace(" ", "_")
-    folder_name = f"Dreamers_{datetime.date.today().strftime('%Y%m%d')}_{slug}"
-
-    raw_platforms = request.POST.getlist("platforms[]") or request.POST.getlist("platforms")
-    if not raw_platforms:
-        raw_platforms = ["instagram_reel", "instagram_feed", "tiktok"]
-
-    from .export_service import create_export_package
-    try:
-        export = create_export_package(
-            image_bytes=image_bytes,
-            script=script,
-            audio_bytes=audio_bytes,
-            platforms=raw_platforms,
-            access_token=tokens["token"],
-            folder_name=folder_name,
-        )
-    except Exception as e:
-        return JsonResponse({"ok": False, "step": "drive", "error": str(e)}, status=500)
-
-    warnings = [w for w in [ai_warning, voice_warning] if w]
     return JsonResponse({
-        "ok":          True,
-        "folder_link": export["folder_link"],
-        "folder_name": folder_name,
-        "files":       export["files"],
-        "script":      script,
-        "caption":     script.get("caption", ""),
-        "hashtags":    script.get("hashtags", []),
-        "warnings":    warnings,
-    })
+        "ok": False,
+        "error": "ميزة Export بدون Drive ستُضاف قريباً. استخدم Pipeline + حفظ محلي.",
+    }, status=501)
 
 
-# ─── Full Pipeline ────────────────────────────────────────────────────────────
+# ─── Pipeline ────────────────────────────────────────────────────────────────
 
 def pipeline_page(request):
-    """صفحة الـ Pipeline المتكاملة."""
-    from .elevenlabs_service import list_voices
+    from .elevenlabs_service import list_voices as _lv
     voices = []
     try:
-        voices = list_voices()
+        voices = _lv()
     except Exception:
         pass
     return render(request, "studio/pipeline.html", {"voices": voices})
@@ -581,15 +301,11 @@ def api_create_full_content(request):
     """
     POST /api/create-full-content/
     multipart/form-data:
-      image (file)
-      topic, platform, language, tone, duration
-      voice_id (optional)
-      ai_image_instruction (optional)
-      generate_video (true/false)
-      platforms (comma-separated list for resize)
-    يرجع الملفات كـ base64 مباشرة - بدون Drive.
+      image (file), topic, platform, language, tone, duration,
+      voice_id (optional), ai_image_instruction (optional),
+      platforms (comma-separated)
+    Note: video generation removed from pipeline — use /api/generate-video/ separately.
     """
-    # ── صورة ─────────────────────────────────────────────────────────────────
     image_bytes = None
     if request.FILES.get("image"):
         image_bytes = request.FILES["image"].read()
@@ -601,7 +317,6 @@ def api_create_full_content(request):
     if not topic:
         return JsonResponse({"ok": False, "error": "الموضوع مطلوب"}, status=400)
 
-    # Flutter sends comma-separated, web sends platforms[] array
     _plat_raw = request.POST.get("platforms", "")
     if _plat_raw:
         platforms_resize = [p.strip() for p in _plat_raw.split(",") if p.strip()]
@@ -610,9 +325,6 @@ def api_create_full_content(request):
             request.POST.getlist("platforms[]") or
             ["instagram_reel", "instagram_feed", "tiktok"]
         )
-
-    gen_video_raw = (request.POST.get("generate_video") or "").lower()
-    gen_video = gen_video_raw in ("true", "1", "yes")
 
     from .pipeline_service import create_full_content
     try:
@@ -625,7 +337,6 @@ def api_create_full_content(request):
             duration=int(request.POST.get("duration", 30)),
             voice_id=request.POST.get("voice_id") or None,
             ai_image_instruction=request.POST.get("ai_image_instruction") or None,
-            generate_video=gen_video,
             platforms_resize=platforms_resize,
         )
         return JsonResponse(result)
@@ -633,37 +344,43 @@ def api_create_full_content(request):
         return JsonResponse({"ok": False, "error": str(e)}, status=500)
 
 
-# ─── Video (Veo) ──────────────────────────────────────────────────────────────
+# ─── Video (Veo) — with rate limiting ────────────────────────────────────────
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_generate_video(request):
     """
     POST /api/generate-video/
-    JSON: {prompt, aspect_ratio, drive_file_id (اختياري)}
-    Returns: MP4 video bytes
+    multipart: image (file, optional) + prompt + aspect_ratio
+    Returns JSON: {ok, video_b64}
+    Rate limited by ENABLE_VIDEO_GENERATION + MAX_VIDEO_GENERATIONS_PER_DAY.
     """
-    try:
-        body = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return JsonResponse({"ok": False, "error": "JSON غير صالح"}, status=400)
+    allowed, err_msg = _check_video_allowed()
+    if not allowed:
+        return JsonResponse({"ok": False, "error": err_msg}, status=429)
 
-    prompt = (body.get("prompt") or "").strip()
+    # Support both multipart and JSON
+    if request.FILES.get("image"):
+        image_bytes  = request.FILES["image"].read()
+        prompt       = (request.POST.get("prompt") or "").strip()
+        aspect_ratio = request.POST.get("aspect_ratio", "9:16")
+    else:
+        try:
+            body = json.loads(request.body or "{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"ok": False, "error": "JSON غير صالح"}, status=400)
+        image_bytes  = None
+        prompt       = (body.get("prompt") or "").strip()
+        aspect_ratio = body.get("aspect_ratio", "9:16")
+
     if not prompt:
         return JsonResponse({"ok": False, "error": "البرومت مطلوب"}, status=400)
 
-    aspect_ratio  = body.get("aspect_ratio", "9:16")
-    drive_file_id = (body.get("drive_file_id") or "").strip()
-
-    image_bytes = None
-    if drive_file_id:
-        tokens = request.session.get("drive_tokens")
-        if tokens:
-            from .drive_service import download_file as drive_dl
-            try:
-                image_bytes = drive_dl(tokens["token"], drive_file_id)
-            except Exception:
-                pass
+    count = _increment_video_count()
+    print(
+        f"[VEO COST WARNING] Video generation #{count} today "
+        f"- estimated cost: $0.25-0.30"
+    )
 
     from .video_service import generate_video
     try:
@@ -675,21 +392,21 @@ def api_generate_video(request):
     except Exception as e:
         return JsonResponse({"ok": False, "error": str(e)}, status=500)
 
-    return HttpResponse(
-        video_bytes,
-        content_type="video/mp4",
-        headers={"Content-Disposition": 'attachment; filename="generated_video.mp4"'},
-    )
+    return JsonResponse({
+        "ok": True,
+        "video_b64": base64.b64encode(video_bytes).decode("utf-8"),
+        "count_today": count,
+    })
 
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_generate_video_from_script(request):
-    """
-    POST /api/generate-video-from-script/
-    JSON: {scenes: [...], platform: "instagram_reel"}
-    Returns: MP4 video bytes
-    """
+    """POST /api/generate-video-from-script/ — for web interface."""
+    allowed, err_msg = _check_video_allowed()
+    if not allowed:
+        return JsonResponse({"ok": False, "error": err_msg}, status=429)
+
     try:
         body = json.loads(request.body or "{}")
     except json.JSONDecodeError:
@@ -700,6 +417,9 @@ def api_generate_video_from_script(request):
 
     if not scenes:
         return JsonResponse({"ok": False, "error": "المشاهد مطلوبة"}, status=400)
+
+    count = _increment_video_count()
+    print(f"[VEO COST WARNING] Video generation #{count} today - estimated cost: $0.25-0.30")
 
     from .video_service import generate_video_from_script
     try:
@@ -714,17 +434,16 @@ def api_generate_video_from_script(request):
     )
 
 
+# ─── Voice Settings page ──────────────────────────────────────────────────────
+
 def voice_settings_page(request):
-    """صفحة التحكم في إعدادات الأصوات"""
     voices = []
     error  = None
     try:
         voices = list_voices()
     except Exception as e:
         error = str(e)
-
     return render(request, "studio/voice_settings.html", {
         "voices": voices,
         "error":  error,
-        "default_settings": DEFAULT_SETTINGS,
     })

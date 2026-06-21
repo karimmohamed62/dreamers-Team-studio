@@ -13,10 +13,12 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-insecure-key-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "True") == "True"
 ALLOWED_HOSTS = ["*"]  # للتطوير فقط — ظبطها في الإنتاج
 
-GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")
-ELEVENLABS_API_KEY  = os.getenv("ELEVENLABS_API_KEY", "")
-GOOGLE_CLIENT_ID    = os.getenv("GOOGLE_CLIENT_ID", "")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+GEMINI_API_KEY     = os.getenv("GEMINI_API_KEY", "")
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
+
+# ── Video generation guards ────────────────────────────────────────────────────
+ENABLE_VIDEO_GENERATION      = os.getenv("ENABLE_VIDEO_GENERATION", "True") == "True"
+MAX_VIDEO_GENERATIONS_PER_DAY = int(os.getenv("MAX_VIDEO_GENERATIONS_PER_DAY", "5"))
 
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
 
