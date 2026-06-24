@@ -309,12 +309,13 @@ def api_create_full_content(request):
       platforms (comma-separated)
     Note: video generation removed from pipeline — use /api/generate-video/ separately.
     """
-    image_bytes = None
-    if request.FILES.get("image"):
-        image_bytes = request.FILES["image"].read()
-
-    if not image_bytes:
-        return JsonResponse({"ok": False, "error": "صورة مطلوبة"}, status=400)
+    # Support multi-image ('images' field) with single-image fallback ('image')
+    image_files = request.FILES.getlist("images") or (
+        [request.FILES["image"]] if request.FILES.get("image") else []
+    )
+    if not image_files:
+        return JsonResponse({"ok": False, "error": "صورة واحدة على الأقل مطلوبة"}, status=400)
+    images_bytes_list = [f.read() for f in image_files]
 
     topic = (request.POST.get("topic") or "").strip()
     if not topic:
@@ -332,7 +333,7 @@ def api_create_full_content(request):
     from .pipeline_service import create_full_content
     try:
         result = create_full_content(
-            image_bytes=image_bytes,
+            images_bytes_list=images_bytes_list,
             topic=topic,
             platform=request.POST.get("platform", "instagram_reel"),
             language=request.POST.get("language", "العربية"),
@@ -373,6 +374,11 @@ def api_generate_video(request):
     Returns immediately with {ok, job_id}.
     Flutter polls /api/video-status/<job_id>/ until done.
     """
+    if not settings.ENABLE_VIDEO_GENERATION:
+        return JsonResponse({
+            "ok": False,
+            "error": "توليد الفيديو متوقف مؤقتاً لحماية الكريديت. سيتم تفعيله يدوياً.",
+        }, status=403)
     allowed, err_msg = _check_video_allowed()
     if not allowed:
         return JsonResponse({"ok": False, "error": err_msg}, status=429)
@@ -425,6 +431,11 @@ def api_video_status(request, job_id):
 @require_http_methods(["POST"])
 def api_generate_video_from_script(request):
     """POST /api/generate-video-from-script/ — for web interface."""
+    if not settings.ENABLE_VIDEO_GENERATION:
+        return JsonResponse({
+            "ok": False,
+            "error": "توليد الفيديو متوقف مؤقتاً لحماية الكريديت. سيتم تفعيله يدوياً.",
+        }, status=403)
     allowed, err_msg = _check_video_allowed()
     if not allowed:
         return JsonResponse({"ok": False, "error": err_msg}, status=429)
