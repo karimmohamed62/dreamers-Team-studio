@@ -61,26 +61,37 @@ def create_full_content(
     if platforms_resize is None:
         platforms_resize = ["instagram_reel", "instagram_feed", "tiktok"]
 
-    # ── 1. AI image edit (applied to each image) ──────────────────────────────
+    # ── 1. AI image edit (parallel across images) ─────────────────────────────
     if ai_image_instruction and ai_image_instruction.strip():
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         n = len(images_bytes_list)
-        steps_log.append({"status": "running", "msg": f"⏳ بيعدّل {n} صورة بـ AI..."})
-        edited_images_out = []
+        steps_log.append({"status": "running", "msg": f"⏳ بيعدّل {n} صورة بـ AI (بالتوازي)..."})
+        edited_images_out = [None] * n
         any_error = False
-        for i, img_bytes in enumerate(images_bytes_list):
-            try:
-                from .image_service import edit_image
-                edited = edit_image(img_bytes, ai_image_instruction.strip())
-                working_images[i] = edited
-                edited_images_out.append({
-                    "preview": _small_preview(edited),
-                    "b64": base64.b64encode(edited).decode("utf-8"),
-                })
-            except Exception as e:
-                err = f"❌ تعديل الصورة {i + 1} فشل: {e}"
-                edited_images_out.append({"error": err})
-                result["errors"].append(err)
-                any_error = True
+
+        def _edit_one(idx, img_bytes, instruction):
+            from .image_service import edit_image
+            return idx, edit_image(img_bytes, instruction)
+
+        with ThreadPoolExecutor(max_workers=min(n, 3)) as pool:
+            futures = {
+                pool.submit(_edit_one, i, img, ai_image_instruction.strip()): i
+                for i, img in enumerate(images_bytes_list)
+            }
+            for fut in as_completed(futures):
+                i = futures[fut]
+                try:
+                    idx, edited = fut.result()
+                    working_images[idx] = edited
+                    edited_images_out[idx] = {
+                        "preview": _small_preview(edited),
+                        "b64": base64.b64encode(edited).decode("utf-8"),
+                    }
+                except Exception as e:
+                    err = f"❌ تعديل الصورة {i + 1} فشل: {e}"
+                    edited_images_out[i] = {"error": err}
+                    result["errors"].append(err)
+                    any_error = True
 
         result["edited_images"] = edited_images_out
         # backward compat: expose first successful edit at top level
@@ -126,26 +137,40 @@ def create_full_content(
             steps_log[-1] = {"status": "error", "msg": err}
             result["errors"].append(err)
 
-    # ── 4. Resize images (each image × each platform) ─────────────────────────
+    # ── 4. Resize images (parallel: each image × each platform) ──────────────
     n = len(working_images)
     steps_log.append({"status": "running", "msg": f"⏳ جاري تحجيم {n} صورة للمنصات..."})
-    resized_files = []
-    for i, img_bytes in enumerate(working_images):
-        for plt in platforms_resize:
-            if plt not in PLATFORM_SIZES:
-                continue
+
+    tasks = [
+        (i, plt)
+        for i in range(n)
+        for plt in platforms_resize
+        if plt in PLATFORM_SIZES
+    ]
+
+    def _resize_one(i, plt):
+        w, h = PLATFORM_SIZES[plt]
+        fname = f"img{i + 1}_{plt}_{w}x{h}.jpg"
+        resized = resize_image(working_images[i], plt)
+        return {"name": fname, "data": base64.b64encode(resized).decode("utf-8"),
+                "platform": plt, "img_index": i}
+
+    resized_files = [None] * len(tasks)
+    from concurrent.futures import ThreadPoolExecutor, as_completed as _as_completed
+    with ThreadPoolExecutor(max_workers=min(len(tasks), 6)) as pool:
+        fut_map = {pool.submit(_resize_one, i, plt): idx for idx, (i, plt) in enumerate(tasks)}
+        for fut in _as_completed(fut_map):
+            idx = fut_map[fut]
+            i, plt = tasks[idx]
             w, h = PLATFORM_SIZES[plt]
-            fname = f"img{i + 1}_{plt}_{w}x{h}.jpg"
             try:
-                resized = resize_image(img_bytes, plt)
-                resized_files.append({
-                    "name": fname,
-                    "data": base64.b64encode(resized).decode("utf-8"),
-                    "platform": plt,
-                    "img_index": i,
-                })
+                resized_files[idx] = fut.result()
             except Exception as e:
-                resized_files.append({"name": fname, "error": str(e), "img_index": i})
+                resized_files[idx] = {
+                    "name": f"img{i + 1}_{plt}_{w}x{h}.jpg",
+                    "error": str(e), "img_index": i,
+                }
+    resized_files = [f for f in resized_files if f is not None]
 
     result["files"] = resized_files
     total = len(resized_files)
