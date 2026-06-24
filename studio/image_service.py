@@ -35,16 +35,30 @@ def edit_image(image_bytes, instruction, output_format="JPEG"):
     elif image_bytes[:4] == b"RIFF" and image_bytes[8:12] == b"WEBP":
         mime_type = "image/webp"
 
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=[
-            types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-            types.Part.from_text(text=instruction),
-        ],
-        config=types.GenerateContentConfig(
-            response_modalities=["IMAGE"],
-        ),
-    )
+    import time
+
+    def _call():
+        return client.models.generate_content(
+            model=MODEL,
+            contents=[
+                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                types.Part.from_text(text=instruction),
+            ],
+            config=types.GenerateContentConfig(
+                response_modalities=["IMAGE"],
+            ),
+        )
+
+    response = None
+    for attempt in range(3):
+        try:
+            response = _call()
+            break
+        except Exception as e:
+            if attempt < 2 and ("429" in str(e) or "quota" in str(e).lower() or "rate" in str(e).lower()):
+                time.sleep(15 * (attempt + 1))
+                continue
+            raise
 
     for part in response.parts:
         if part.inline_data and part.inline_data.data:

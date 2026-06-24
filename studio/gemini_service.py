@@ -65,14 +65,26 @@ def clean_json(text):
         return json.loads(text[start:end])
     return json.loads(text)
 
+def _call_with_retry(fn, retries=3, base_wait=10):
+    import time
+    for attempt in range(retries):
+        try:
+            return fn()
+        except Exception as e:
+            if attempt < retries - 1 and ("429" in str(e) or "quota" in str(e).lower() or "rate" in str(e).lower()):
+                time.sleep(base_wait * (attempt + 1))
+                continue
+            raise
+
+
 def generate_script(topic, platform="instagram", language="ألمانية",
                     tone="حماسي ومغامر", duration=30):
     client = get_client()
     prompt = build_prompt(topic, platform, language, tone, duration)
-    response = client.models.generate_content(
+    response = _call_with_retry(lambda: client.models.generate_content(
         model="gemini-2.5-flash-lite",
         contents=prompt,
-    )
+    ))
     data = clean_json(response.text)
     spec = PLATFORM_SPECS.get(platform, PLATFORM_SPECS["instagram"])
     data["meta"] = {

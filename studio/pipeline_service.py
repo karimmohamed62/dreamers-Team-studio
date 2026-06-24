@@ -73,7 +73,7 @@ def create_full_content(
             from .image_service import edit_image
             return idx, edit_image(img_bytes, instruction)
 
-        with ThreadPoolExecutor(max_workers=min(n, 3)) as pool:
+        with ThreadPoolExecutor(max_workers=1) as pool:
             futures = {
                 pool.submit(_edit_one, i, img, ai_image_instruction.strip()): i
                 for i, img in enumerate(images_bytes_list)
