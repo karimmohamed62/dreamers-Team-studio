@@ -26,23 +26,44 @@ def get_client():
 
 def build_prompt(topic, platform, language, tone, duration):
     spec = PLATFORM_SPECS.get(platform, PLATFORM_SPECS["instagram"])
-    return f"""أنت كاتب محتوى محترف لشركة سياحة مصرية اسمها "Dreamers Team".
-اكتب سكريبت فيديو لـ {spec['label']} باللغة ال{language}.
-الموضوع: {topic}
-الأسلوب: {tone}
-المدة: {duration} ثانية
-المقاس: {spec['ratio']} ({spec['size']})
+    return f"""أنت كاتب محتوى إبداعي محترف متخصص في صناعة المحتوى لوسائل التواصل الاجتماعي.
 
-اكتب JSON فقط بدون أي نص إضافي:
-{{"hook":"...","scenes":[{{"time":"0-5s","visual":"...","voiceover":"...","text_overlay":"..."}}],"cta":"...","caption":"...","hashtags":["..."]}}"""
+مهمتك الوحيدة: اكتب سكريبت فيديو احترافي ومقنع حصريًا عن الموضوع التالي:
+«{topic}»
+
+تفاصيل السكريبت:
+- المنصة: {spec['label']}
+- اللغة: {language}
+- الأسلوب: {tone}
+- المدة الإجمالية: {duration} ثانية تقريبًا
+- النسبة: {spec['ratio']}
+
+تعليمات صارمة:
+- السكريبت يجب أن يكون عن «{topic}» تحديدًا وليس أي موضوع آخر
+- ابدأ بـ hook يخطف الانتباه في أول 3 ثواني
+- الـ voiceover يكون طبيعي ومناسب للمدة المحددة
+- اكتب فقط JSON بدون أي نص أو شرح إضافي
+
+الصيغة المطلوبة:
+{{"hook":"نص الـ hook","scenes":[{{"time":"0-5s","visual":"وصف المشهد البصري","voiceover":"نص الكلام المنطوق","text_overlay":"نص يظهر على الشاشة"}}],"cta":"نص الـ call to action","caption":"كابشن السوشيال ميديا","hashtags":["هاشتاق1","هاشتاق2"]}}"""
 
 def clean_json(text):
     text = text.strip()
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        if text.startswith("json"):
-            text = text[4:]
-    return json.loads(text.strip())
+    # Strip markdown code fences
+    if "```" in text:
+        parts = text.split("```")
+        for part in parts:
+            part = part.strip()
+            if part.startswith("json"):
+                part = part[4:].strip()
+            if part.startswith("{"):
+                return json.loads(part)
+    # Try direct parse
+    start = text.find("{")
+    end   = text.rfind("}") + 1
+    if start != -1 and end > start:
+        return json.loads(text[start:end])
+    return json.loads(text)
 
 def generate_script(topic, platform="instagram", language="ألمانية",
                     tone="حماسي ومغامر", duration=30):
