@@ -309,10 +309,8 @@ def api_create_full_content(request):
       platforms (comma-separated)
     Note: video generation removed from pipeline — use /api/generate-video/ separately.
     """
-    # Support multi-image ('images' field) with single-image fallback ('image')
-    image_files = request.FILES.getlist("images") or (
-        [request.FILES["image"]] if request.FILES.get("image") else []
-    )
+    # Support multi-image: multiple files sent under same 'image' field name
+    image_files = request.FILES.getlist("image")
     if not image_files:
         return JsonResponse({"ok": False, "error": "صورة واحدة على الأقل مطلوبة"}, status=400)
     images_bytes_list = [f.read() for f in image_files]
