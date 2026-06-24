@@ -200,7 +200,7 @@ def home(request):
 
 def deploy_check(request):
     """Quick check to confirm current deployment version."""
-    return HttpResponse("v20260621-no-drive")
+    return HttpResponse("v20260624-async-video")
 
 
 # ─── Image Edit & Resize ──────────────────────────────────────────────────────
