@@ -16,8 +16,9 @@ ALLOWED_HOSTS = ["*"]  # للتطوير فقط — ظبطها في الإنتا�
 GEMINI_API_KEY     = os.getenv("GEMINI_API_KEY", "")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
 
-# ── Video generation guards ────────────────────────────────────────────────────
-ENABLE_VIDEO_GENERATION      = os.getenv("ENABLE_VIDEO_GENERATION", "False") == "True"
+# ── API feature guards (protect credits) ──────────────────────────────────────
+ENABLE_VIDEO_GENERATION       = os.getenv("ENABLE_VIDEO_GENERATION",  "False") == "True"
+ENABLE_IMAGE_AI_EDIT          = os.getenv("ENABLE_IMAGE_AI_EDIT",     "False") == "True"
 MAX_VIDEO_GENERATIONS_PER_DAY = int(os.getenv("MAX_VIDEO_GENERATIONS_PER_DAY", "5"))
 
 SESSION_ENGINE = "django.contrib.sessions.backends.db"

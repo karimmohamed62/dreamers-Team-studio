@@ -61,50 +61,56 @@ def create_full_content(
     if platforms_resize is None:
         platforms_resize = ["instagram_reel", "instagram_feed", "tiktok"]
 
-    # ── 1. AI image edit (parallel across images) ─────────────────────────────
+    # ── 1. AI image edit (guarded by ENABLE_IMAGE_AI_EDIT) ───────────────────
     if ai_image_instruction and ai_image_instruction.strip():
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        n = len(images_bytes_list)
-        steps_log.append({"status": "running", "msg": f"⏳ بيعدّل {n} صورة بـ AI (بالتوازي)..."})
-        edited_images_out = [None] * n
-        any_error = False
+        from django.conf import settings as _cfg
+        if not _cfg.ENABLE_IMAGE_AI_EDIT:
+            steps_log.append({
+                "status": "done",
+                "msg": "⏭️ تعديل الصورة بـ AI معطّل مؤقتاً (لحماية رصيد الـ API) — الصورة الأصلية تُستخدم كما هي",
+            })
+        else:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            n = len(images_bytes_list)
+            steps_log.append({"status": "running", "msg": f"⏳ بيعدّل {n} صورة بـ AI..."})
+            edited_images_out = [None] * n
+            any_error = False
 
-        def _edit_one(idx, img_bytes, instruction):
-            from .image_service import edit_image
-            return idx, edit_image(img_bytes, instruction)
+            def _edit_one(idx, img_bytes, instruction):
+                from .image_service import edit_image
+                return idx, edit_image(img_bytes, instruction)
 
-        with ThreadPoolExecutor(max_workers=1) as pool:
-            futures = {
-                pool.submit(_edit_one, i, img, ai_image_instruction.strip()): i
-                for i, img in enumerate(images_bytes_list)
-            }
-            for fut in as_completed(futures):
-                i = futures[fut]
-                try:
-                    idx, edited = fut.result()
-                    working_images[idx] = edited
-                    edited_images_out[idx] = {
-                        "preview": _small_preview(edited),
-                        "b64": base64.b64encode(edited).decode("utf-8"),
-                    }
-                except Exception as e:
-                    err = f"❌ تعديل الصورة {i + 1} فشل: {e}"
-                    edited_images_out[i] = {"error": err}
-                    result["errors"].append(err)
-                    any_error = True
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                futures = {
+                    pool.submit(_edit_one, i, img, ai_image_instruction.strip()): i
+                    for i, img in enumerate(images_bytes_list)
+                }
+                for fut in as_completed(futures):
+                    i = futures[fut]
+                    try:
+                        idx, edited = fut.result()
+                        working_images[idx] = edited
+                        edited_images_out[idx] = {
+                            "preview": _small_preview(edited),
+                            "b64": base64.b64encode(edited).decode("utf-8"),
+                        }
+                    except Exception as e:
+                        err = f"❌ تعديل الصورة {i + 1} فشل: {e}"
+                        edited_images_out[i] = {"error": err}
+                        result["errors"].append(err)
+                        any_error = True
 
-        result["edited_images"] = edited_images_out
-        # backward compat: expose first successful edit at top level
-        for ei in edited_images_out:
-            if "b64" in ei:
-                result["edited_image_preview"] = ei.get("preview")
-                result["edited_image_b64"] = ei.get("b64")
-                break
+            result["edited_images"] = edited_images_out
+            for ei in edited_images_out:
+                if ei and "b64" in ei:
+                    result["edited_image_preview"] = ei.get("preview")
+                    result["edited_image_b64"] = ei.get("b64")
+                    break
 
-        msg = f"✅ تم تعديل الصور ({n} صورة)"
-        if any_error:
-            msg = "⚠️ اكتمل التعديل مع بعض الأخطاء"
-        steps_log[-1] = {"status": "done" if not any_error else "error", "msg": msg}
+            msg = f"✅ تم تعديل الصور ({n} صورة)"
+            if any_error:
+                msg = "⚠️ اكتمل التعديل مع بعض الأخطاء"
+            steps_log[-1] = {"status": "done" if not any_error else "error", "msg": msg}
 
     # ── 2. Generate script ────────────────────────────────────────────────────
     steps_log.append({"status": "running", "msg": "⏳ بيولّد السكريبت..."})

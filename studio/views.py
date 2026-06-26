@@ -200,7 +200,7 @@ def home(request):
 
 def deploy_check(request):
     """Quick check to confirm current deployment version."""
-    return HttpResponse("v20260624-multi-image-no-video")
+    return HttpResponse("v20260626-hard-block-image-ai-and-video")
 
 
 # ─── Image Edit & Resize ──────────────────────────────────────────────────────
@@ -220,6 +220,12 @@ def api_edit_image(request):
     instruction = (request.POST.get("instruction") or "").strip()
     if not instruction:
         return JsonResponse({"ok": False, "error": "التعليمات مطلوبة"}, status=400)
+
+    if not settings.ENABLE_IMAGE_AI_EDIT:
+        return JsonResponse({
+            "ok": False,
+            "error": "تعديل الصور بـ AI معطّل مؤقتاً لحماية رصيد الـ API.",
+        }, status=403)
 
     from .image_service import edit_image
     try:
